@@ -203,6 +203,7 @@ const ContentState = (props) => {
       type: "video/webm; codecs=vp8, opus",
     });
 
+
     const { recordingDuration } = await chrome.storage.local.get(
       "recordingDuration"
     );
@@ -490,21 +491,24 @@ const ContentState = (props) => {
   }, []);
 
 
- function base64ToFile(base64, prefix = "video") {
-  const arr = base64.split(",");
-  const mime = arr[0].match(/:(.*?);/)[1];
-  const bstr = atob(arr[1]);
-  let n = bstr.length;
-  const u8arr = new Uint8Array(n);
-  while (n--) {
-    u8arr[n] = bstr.charCodeAt(n);
-  }
 
+
+
+
+async function base64ToFile(base64String, prefix = "video") {
+  // Convert dataURL -> Blob
+  const res = await fetch(base64String);
+  const blob = await res.blob();
+
+  // Build a proper filename with correct extension
   const timestamp = Date.now();
-  const filename = `${prefix}_${timestamp}.mp4`;
+  const ext = blob.type.split("/")[1] || "mp4"; // e.g. webm, mp4
+  const filename = `${prefix}_${timestamp}.${ext}`;
 
-  return new File([u8arr], filename, { type: mime });
+  // Create File from Blob
+  return new File([blob], filename, { type: blob.type });
 }
+
 
 
 function sendCombinedJsonToBackend() {
@@ -515,7 +519,7 @@ function sendCombinedJsonToBackend() {
       const data = {
         videoDescription: result.videoDescription || "",
         clickCoordinates: result.clickCoordinates || [],
-        clicks: result.clicks || [],
+      
       };
 
       // Convert JSON → string
@@ -539,83 +543,93 @@ function sendCombinedJsonToBackend() {
 
 
 
+ useEffect(() => {
+
+  if (!contentState.webm) return;
+
+
+  chrome.storage.local.get(['SELLER_DETAILS'], async (result) => {
+    if (!result?.SELLER_DETAILS) {
+      console.log("No seller details saved yet.");
+      return;
+    }
+
+    try {
+      const ACCESS_TOKEN = result.SELLER_DETAILS?.ACCESS_TOKEN;
+      const SELLER_ID = result.SELLER_DETAILS?.SELLER_ID;
+
+      const header = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${ACCESS_TOKEN}`,
+      };
+
+      const body = JSON.stringify({ seller_id: SELLER_ID });
+
+   
+
+      // ✅ Prepare JSON file
+      let jsonfile = await sendCombinedJsonToBackend();
+
+      // ✅ First API call: create studio_video_id
+      const response = await fetch("https://devbackend.demokraft.ai/studio/api/v1/studio/videos", {
+        method: "POST",
+        headers: header,
+        body: body,
+      });
+
+      const resultStudio = await response.json();
+      console.log(resultStudio, "full response");
+
+      const studio_video_id = resultStudio?.data?.studio_video_id;
+      if (!studio_video_id) {
+        console.error("No studio_video_id returned from API");
+        return;
+      }
+
+      // ✅ Prepare FormData
+      let formdata = new FormData();
+      formdata.append("videowebm", contentState.webm);
+      formdata.append("jsonfile", jsonfile);
+      formdata.append("studio_video_id", studio_video_id);
+      formdata.append("seller_id", SELLER_ID);
+
+
+      // ✅ Second API call: upload content
+      const responseContentService = await fetch("https://devbackend.demokraft.ai/content/v1/studio", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${ACCESS_TOKEN}`, // ⚠️ don't set Content-Type manually
+        },
+        body: formdata,
+      });
+
+      const resultContent = await responseContentService.json();
+
+            console.log(resultContent,"formdataformdataformdataformdata")
+
+
+
+
+      if (resultContent?.data) {
+        setContentState((prevState) => ({
+          ...prevState,
+          videoUploadContentService: true,
+          studio_video_id: studio_video_id,
+        }));
+      }
+    } catch (err) {
+      console.error("Upload failed:", err);
+    }
+  });
+}, [contentState.webm]);
+
+
+
+
   const onMessage = async (event) => {
 
 
     if (event.data.type === "updated-blob") {
-      chrome.storage.local.get(['SELLER_DETAILS'], async(result) => {
-
-        
-        if (result?.SELLER_DETAILS) {
-
-          let  ACCESS_TOKEN= result.SELLER_DETAILS?.ACCESS_TOKEN
-          let  SELLER_ID= result.SELLER_DETAILS?.SELLER_ID
-
-          const header= {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${ACCESS_TOKEN}`, // ✅ token here
-          }
-          const body=JSON.stringify({
-            seller_id: SELLER_ID,
-            
-           
-          })
-
-
-      let video= await base64ToFile(event.data.base64);
-
-      let jsonfile=await sendCombinedJsonToBackend()
-      // console.log(jsonfile,"jsonfile")
- 
-     
-
-            const response = await fetch("https://devbackend.demokraft.ai/studio/api/v1/studio/videos", {
-              method: "POST",
-              headers: header,
-              body: body,
-            });
-
-            const resultstudion = await response.json(); // parse JSON
-
-            console.log(resultstudion, "full response");
-            console.log(resultstudion.data.studio_video_id, "studio_video_id");
-
-            // if you only need the id
-            const studio_video_id = resultstudion.data.studio_video_id;
-
-             let formdata=new FormData();
-              formdata.append('video',video)
-              formdata.append('jsonfile',jsonfile)
-              formdata.append('studio_video_id',studio_video_id)
-              formdata.append('seller_id',SELLER_ID)
-
-          const responseContentService = await fetch("https://devbackend.demokraft.ai/content/v1/studio", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${ACCESS_TOKEN}`, // if required
-              // ⚠️ Do NOT set "Content-Type" here
-            },
-            body: formdata,
-          });
-             const resultContent = await responseContentService.json(); // parse JSON
-            if(resultContent?.data){
-                  setContentState((prevState) => ({
-                    ...prevState,
-                      videoUploadContentService:true,
-                      studio_video_id:studio_video_id
-                  }));
-            }
-
-
-
-        } else {
-          console.log("No seller details saved yet.");
-        }
-      });
-       
-
-
-
       const base64 = event.data.base64;
       const blob = new Blob([base64ToUint8Array(base64)], {
         type: "video/mp4",

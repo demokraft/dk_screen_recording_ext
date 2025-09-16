@@ -10,6 +10,8 @@ const VideoPlayer = (props) => {
   const [source, setSource] = useState(null);
   const [isSet, setIsSet] = useState(false);
 
+  console.log("kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk")
+
   useEffect(() => {
     if (
       playerRef.current &&
@@ -37,6 +39,7 @@ const VideoPlayer = (props) => {
 
   useEffect(() => {
     if (contentState.blob) {
+     
       const objectURL = URL.createObjectURL(contentState.blob);
       setSource({
         type: "video",

@@ -82,7 +82,7 @@ const Setup = () => {
 				4- To Stop  recording click the extension icon   <span>
                   <img
                     src={chrome.runtime.getURL(
-                      "assets/helper/icon-128.png"
+                      "assets/recording-logo.png"
                     )}
                   />
                 </span>

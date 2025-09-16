@@ -7,10 +7,11 @@ import Settings from "./Settings";
 import { contentStateContext } from "../../context/ContentState";
 import { CameraOffBlue, MicOffBlue } from "../../images/popup/images";
 import * as Dialog from "@radix-ui/react-dialog";
+import stoprecodingicon from "../../../../assets/recording-logo.png"
 
 import BackgroundEffects from "../components/BackgroundEffects";
 
-import { AlertIcon, TimeIcon, NoInternet } from "../../toolbar/components/SVG";
+import { AlertIcon, TimeIcon,StopIcon, NoInternet } from "../../toolbar/components/SVG";
 import VideoAbout from "../../../VideoAbout/VideoAbout";
 
 const RecordingType = (props) => {
@@ -22,11 +23,9 @@ const RecordingType = (props) => {
 
   const [time, setTime] = useState(0);
   const [URL, setURL] = useState(
-    "https://help.screenity.io/getting-started/77KizPC8MHVGfpKpqdux9D/what-are-the-technical-requirements-for-using-screenity/6kdB6qru6naVD8ZLFvX3m9"
-  );
+""  );
   const [URL2, setURL2] = useState(
-    "https://help.screenity.io/troubleshooting/9Jy5RGjNrBB42hqUdREQ7W/how-to-grant-screenity-permission-to-record-your-camera-and-microphone/x6U69TnrbMjy5CQ96Er2E9"
-  );
+""  );
 
   const buttonRef = useRef(null);
   const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
@@ -329,10 +328,21 @@ const RecordingType = (props) => {
             ? chrome.i18n.getMessage("recordButtonNoCameraLabel")
             : chrome.i18n.getMessage("recordButtonLabel")}
         </span>
+
+
         <span className="main-button-shortcut">
           {contentState.recordingShortcut}
         </span>
       </button>
+<div className="start-recording-footer">
+  <span>To stop recording.click the extension icon</span>
+   <StopIcon width="20" height="20"  />
+
+
+</div>
+
+    
+
      <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Overlay
          style={{

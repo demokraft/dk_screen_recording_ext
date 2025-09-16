@@ -10,6 +10,8 @@ import {
 
 import localforage from "localforage";
 
+
+
 localforage.config({
   driver: localforage.INDEXEDDB,
   name: "screenity",
@@ -356,9 +358,9 @@ chrome.runtime.onMessage.addListener((message, sender) => {
         console.log(message.data, "clickData");
 
         chrome.storage.local.get("clickCoordinates", (result) => {
-            const clicks = result.clickCoordinates || []; // Use the correct key
-            clicks.push(message.data);
-            chrome.storage.local.set({ clickCoordinates: clicks });
+            const clickCoordinates = result.clickCoordinates || []; // Use the correct key
+            clickCoordinates.push(message.data);
+            chrome.storage.local.set({ clickCoordinates });
         });
     }
 });
@@ -699,20 +701,27 @@ chrome.action.onClicked.addListener(async (tab) => {
 
   // === 🚀 Added COMPANY_ID capture logic ===
   if (tab.id) {
-    chrome.tabs.sendMessage(tab.id, { type: "GET_COMPANY_ID" }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.warn("Content script error:", chrome.runtime.lastError.message);
-        return;
-      }
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+  const tab = tabs[0];
+  chrome.tabs.sendMessage(tab.id, { type: "GET_COMPANY_ID" }, (response) => {
+    if (chrome.runtime.lastError) {
+      console.warn("Content script error:", chrome.runtime.lastError.message);
+      return;
+    }
 
-      if (response?.data) {
-        chrome.storage.local.set({ SELLER_DETAILS: response.data }, () => {
-          console.log("COMPANY_ID saved:", response.data);
-        });
-      } else {
-        console.log("No COMPANY_ID found in this tab.");
-      }
-    });
+    if (response?.error === "MISSING_DATA") {
+      // ✅ Open login page in a new tab
+      chrome.tabs.create({ url: "https://devapp.demokraft.ai/" });
+    } else if (response?.data) {
+      chrome.storage.local.set({ SELLER_DETAILS: response.data }, () => {
+        console.log("COMPANY_ID saved:", response.data);
+      });
+    } else {
+      console.log("No COMPANY_ID found in this tab.");
+    }
+  });
+});
+
     
   }
 });
@@ -749,6 +758,37 @@ const getStreamingData = async () => {
     recordingType,
   };
 };
+
+
+
+// public/background.js
+
+// chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
+//   console.log("Received message from:", sender.origin); // The origin of the web app
+
+//   // Securely check if the message is from your app (optional but recommended)
+//   const allowedOrigin = "https://www.your-production-app.com";
+//   if (sender.origin !== allowedOrigin && sender.origin !== "http://localhost:3000") {
+//     console.warn("Message from an unauthorized origin was blocked:", sender.origin);
+//     return; // Stop execution if sender is not whitelisted
+//   }
+
+//   if (request.type === "AUTHENTICATE_USER") {
+//     // Example action: perform some task with the received data
+//     const userToken = request.payload.token;
+//     console.log("Authenticating with token:", userToken);
+    
+//     // You could store the token, validate it, etc.
+    
+//     // Send a response back to the web app
+//     sendResponse({ success: true, message: "User authenticated successfully in extension." });
+//   }
+
+//   // Return true to keep the message channel open for an asynchronous response
+//   return true; 
+// });
+
+
 
 const handleDismiss = async () => {
   chrome.storage.local.set({ restarting: true });
@@ -1126,17 +1166,17 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 
     const locale = chrome.i18n.getMessage("@@ui_locale");
     if (locale.includes("en")) {
-      chrome.runtime.setUninstallURL(
-        "https://tally.so/r/w8Zro5?version=" +
-          chrome.runtime.getManifest().version
-      );
+      // chrome.runtime.setUninstallURL(
+      //   "https://tally.so/r/w8Zro5?version=" +
+      //     chrome.runtime.getManifest().version
+      // );
     } else {
-      chrome.runtime.setUninstallURL(
-        "http://translate.google.com/translate?js=n&sl=auto&tl=" +
-          locale +
-          "&u=https://tally.so/r/w8Zro5?version=" +
-          chrome.runtime.getManifest().version
-      );
+      // chrome.runtime.setUninstallURL(
+      //   "http://translate.google.com/translate?js=n&sl=auto&tl=" +
+      //     locale +
+      //     "&u=https://tally.so/r/w8Zro5?version=" +
+      //     chrome.runtime.getManifest().version
+      // );
     }
     chrome.storage.local.set({ firstTime: true });
     chrome.tabs.create({

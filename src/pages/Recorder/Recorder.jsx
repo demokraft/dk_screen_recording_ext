@@ -335,7 +335,7 @@ function downloadCoordinatesFile(coordinates, fileName = "clicks.json") {
 
         const jsonString = JSON.stringify(clicksData);
       const base64Encoded = btoa(jsonString);
-        downloadCoordinatesFile(base64Encoded, "fabric_clicks.json");
+        // downloadCoordinatesFile(base64Encoded, "fabric_clicks.json");
       });
   }
 

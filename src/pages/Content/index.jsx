@@ -54,8 +54,8 @@ if (!window.hasClickListener) {
         // pageY: e.pageY,
         // nx: normalizedClientX,
         // ny: normalizedClientY,
-        vx,
-        vy,
+       x: vx,
+       y: vy,
         // videoWidth,
         // videoHeight,
         // qualityValue,
@@ -82,19 +82,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const ACCESS_TOKEN = localStorage.getItem("ACCESS_TOKEN");
     const SELLER_ID = localStorage.getItem("SELLER_ID");
 
-    // console.log(window.location.origin,"kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk")
-
-    // Check if any value is missing
     if (!COMPANY_ID || !ACCESS_TOKEN || !SELLER_ID) {
-      // Redirect to login/setup page
-      window.location.href = "https://devapp.demokraft.ai/";
-    }else{
-    sendResponse({ data: { COMPANY_ID, ACCESS_TOKEN, SELLER_ID } });
-
-    } 
+      sendResponse({ error: "MISSING_DATA" });
+    } else {
+      sendResponse({ data: { COMPANY_ID, ACCESS_TOKEN, SELLER_ID } });
+    }
   }
-  return true;
+  return true; // ✅ Needed for async sendResponse
 });
+
+
+
+
+
+
 
 const root = document.createElement("div");
 root.id = "screenity-ui";
