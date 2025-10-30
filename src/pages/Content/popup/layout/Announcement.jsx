@@ -2,8 +2,7 @@ import React, { useState, useEffect } from "react";
 
 const Announcement = (props) => {
   const [URL, setURL] = useState(
-    "https://help.screenity.io/getting-started/77KizPC8MHVGfpKpqdux9D/what%E2%80%99s-changed-in-the-new-version-of-screenity/bDtvcwAtw9PPesQeNH4zjE"
-  );
+""  );
 
   useEffect(() => {
     // check i18n locale, and set URL accordingly w/ google translate

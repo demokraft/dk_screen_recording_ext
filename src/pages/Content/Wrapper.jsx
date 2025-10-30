@@ -27,6 +27,7 @@ import CursorModes from "./utils/CursorModes";
 
 // Context
 import { contentStateContext } from "./context/ContentState";
+import LimitExciedPop from "../Sandbox/LimitExciedPop/LimitExciedPop";
 
 const Wrapper = () => {
   const [contentState, setContentState] = useContext(contentStateContext);
@@ -34,6 +35,7 @@ const Wrapper = () => {
   const parentRef = useRef(null);
   const permissionsRef = useRef(null);
   const regionCaptureRef = useRef(null);
+
 
   useEffect(() => {
     if (!parentRef.current) return;
@@ -122,7 +124,7 @@ const Wrapper = () => {
                   // all: "unset",
                   width: "100%",
                   height: "100%",
-                  zIndex: 999999999,
+                  zIndex: 999,
                   pointerEvents: "all",
                   position: "fixed",
                   background:
@@ -182,13 +184,14 @@ const Wrapper = () => {
                 contentState.customRegion && <Region />}
               {shadowRef.current && <Modal shadowRef={shadowRef} />}
                 <VideoAbout />
+                <LimitExciedPop />
               <Countdown />
-              {contentState.recordingType != "camera" && (
+              {/* {contentState.recordingType != "camera" && (
                 <Camera shadowRef={shadowRef} />
-              )}
-              {contentState.recordingType === "camera" && (
+              )} */}
+              {/* {contentState.recordingType === "camera" && (
                 <CameraOnly shadowRef={shadowRef} />
-              )}
+              )} */}
               {!(contentState.hideToolbar && contentState.hideUI) && (
                 <Toolbar />
               )}

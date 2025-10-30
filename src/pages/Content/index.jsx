@@ -94,7 +94,60 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 
 
+// content.js
 
+// Listen for messages from web app
+window.addEventListener("message", (event) => {
+  if (event.source !== window) return;
+
+  // ✅ Handle saving token
+  if (event.data.type === "SET_TOKEN") {
+    console.log("📩 Got token from web app:", event.data);
+
+    chrome.storage.local.set(
+      {
+        SELLER_DETAILS: {
+          ACCESS_TOKEN: event.data.token,
+          COMPANY_ID: event.data.companyId,
+          SELLER_ID: event.data.sellerId,
+        },
+      },
+      () => {
+        console.log("✅ Token saved in chrome.storage.local");
+
+        // Send confirmation back
+        window.postMessage(
+          {
+            type: "SET_TOKEN_RESPONSE",
+            status: "SUCCESS",
+            data: {
+              ACCESS_TOKEN: event.data.token,
+              COMPANY_ID: event.data.companyId,
+              SELLER_ID: event.data.sellerId,
+            },
+          },
+          "*"
+        );
+      }
+    );
+  }
+
+  // ❌ Handle clearing token
+  if (event.data.type === "CLEAR_TOKEN") {
+    chrome.storage.local.remove("SELLER_DETAILS", () => {
+      console.log("🗑️ Token cleared from chrome.storage.local");
+
+      // Send confirmation back
+      window.postMessage(
+        {
+          type: "CLEAR_TOKEN_RESPONSE",
+          status: "SUCCESS",
+        },
+        "*"
+      );
+    });
+  }
+});
 
 
 const root = document.createElement("div");

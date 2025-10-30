@@ -349,7 +349,7 @@ const ContentState = (props) => {
             () => {},
             () => {},
             null,
-            chrome.i18n.getMessage("learnMoreDot"),
+            // chrome.i18n.getMessage("learnMoreDot"),
             () => {
               chrome.runtime.sendMessage({ type: "memory-limit-help" });
             }
@@ -545,7 +545,7 @@ function sendCombinedJsonToBackend() {
 
  useEffect(() => {
 
-  if (!contentState.webm) return;
+  if (!contentState.webm && !contentState?.ready) return;
 
 
   chrome.storage.local.get(['SELLER_DETAILS'], async (result) => {
@@ -571,7 +571,7 @@ function sendCombinedJsonToBackend() {
       let jsonfile = await sendCombinedJsonToBackend();
 
       // ✅ First API call: create studio_video_id
-      const response = await fetch("https://devbackend.demokraft.ai/studio/api/v1/studio/videos", {
+      const response = await fetch("https://backend.demokraft.ai/studio/api/v1/studio/videos", {
         method: "POST",
         headers: header,
         body: body,
@@ -595,7 +595,7 @@ function sendCombinedJsonToBackend() {
 
 
       // ✅ Second API call: upload content
-      const responseContentService = await fetch("https://devbackend.demokraft.ai/content/v1/studio", {
+      const responseContentService = await fetch("https://backend.demokraft.ai/content/v1/studio", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${ACCESS_TOKEN}`, // ⚠️ don't set Content-Type manually
@@ -621,7 +621,7 @@ function sendCombinedJsonToBackend() {
       console.error("Upload failed:", err);
     }
   });
-}, [contentState.webm]);
+}, [contentState.webm ,contentState.ready]);
 
 
 

@@ -703,23 +703,20 @@ chrome.action.onClicked.addListener(async (tab) => {
   if (tab.id) {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
   const tab = tabs[0];
-  chrome.tabs.sendMessage(tab.id, { type: "GET_COMPANY_ID" }, (response) => {
-    if (chrome.runtime.lastError) {
-      console.warn("Content script error:", chrome.runtime.lastError.message);
-      return;
-    }
+  chrome.storage.local.get(["SELLER_DETAILS"], (res) => {
+  if (!res.SELLER_DETAILS) {
 
-    if (response?.error === "MISSING_DATA") {
-      // ✅ Open login page in a new tab
-      chrome.tabs.create({ url: "https://devapp.demokraft.ai/" });
-    } else if (response?.data) {
-      chrome.storage.local.set({ SELLER_DETAILS: response.data }, () => {
-        console.log("COMPANY_ID saved:", response.data);
-      });
-    } else {
-      console.log("No COMPANY_ID found in this tab.");
-    }
-  });
+    chrome.tabs.create({ url: "https://app.demokraft.ai" });
+    return;
+  }
+
+  // ✅ Already have SELLER_DETAILS → continue with logic
+  console.log("COMPANY_ID found:", res.SELLER_DETAILS);
+
+  // Example: use it immediately
+  // doSomething(res.SELLER_DETAILS);
+});
+
 });
 
     
@@ -1192,17 +1189,17 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     }
     const locale = chrome.i18n.getMessage("@@ui_locale");
     if (locale.includes("en")) {
-      chrome.runtime.setUninstallURL(
-        "https://tally.so/r/3Ex6kX?version=" +
-          chrome.runtime.getManifest().version
-      );
+      // chrome.runtime.setUninstallURL(
+      //   "https://tally.so/r/3Ex6kX?version=" +
+      //     chrome.runtime.getManifest().version
+      // );
     } else {
-      chrome.runtime.setUninstallURL(
-        "http://translate.google.com/translate?js=n&sl=auto&tl=" +
-          locale +
-          "&u=https://tally.so/r/3Ex6kX?version=" +
-          chrome.runtime.getManifest().version
-      );
+      // chrome.runtime.setUninstallURL(
+      //   "http://translate.google.com/translate?js=n&sl=auto&tl=" +
+      //     locale +
+      //     "&u=https://tally.so/r/3Ex6kX?version=" +
+      //     chrome.runtime.getManifest().version
+      // );
     }
   }
   // Check chrome version, if 109 or below, disable backups
@@ -1444,7 +1441,6 @@ const base64ToUint8Array = (base64) => {
 const handleSaveToDrive = async (sendResponse, request, fallback = false) => {
   if (!fallback) {
     const blob = base64ToUint8Array(request.base64);
-    console.log(blob,"jjjjjjjjjjjjjjjjjjjjjjjblob")
 
     // Specify the desired file name
     const fileName = request.title + ".mp4";
@@ -1810,7 +1806,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request.type === "sign-out-drive") {
     handleSignOutDrive();
   } else if (request.type === "open-help") {
-    createTab("https://help.screenity.io/", true, true);
+    // createTab("https://help.screenity.io/", true, true);
   } else if (request.type === "memory-limit-help") {
     createTab(
       "https://help.screenity.io/troubleshooting/9Jy5RGjNrBB42hqUdREQ7W/what-does-%E2%80%9Cmemory-limit-reached%E2%80%9D-mean-when-recording/8WkwHbt3puuXunYqQnyPcb",

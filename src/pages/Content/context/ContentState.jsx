@@ -285,8 +285,8 @@ const ContentState = (props) => {
                   clearAction,
                   () => {},
                   null,
-                  chrome.i18n.getMessage("learnMoreDot"),
-                  helpURL
+                  // chrome.i18n.getMessage("learnMoreDot"),
+                  // helpURL
                 );
               });
           }
@@ -325,8 +325,8 @@ const ContentState = (props) => {
               },
               () => {},
               null,
-              chrome.i18n.getMessage("learnMoreDot"),
-              URL,
+              // chrome.i18n.getMessage("learnMoreDot"),
+              // URL,
               true
             );
             return;
@@ -565,7 +565,7 @@ const ContentState = (props) => {
             noMorePermissions();
           },
           chrome.runtime.getURL("assets/helper/permissions.webp"),
-          chrome.i18n.getMessage("learnMoreDot"),
+          // chrome.i18n.getMessage("learnMoreDot"),
           URL2,
           true,
           false
@@ -680,7 +680,7 @@ const ContentState = (props) => {
     askMicrophone: true,
     recordingShortcut: "⌥⇧W",
     recordingShortcut: "⌥⇧D",
-    cursorMode: "target",
+    cursorMode: null,
     shape: "rectangle",
     shapeFill: false,
     pushToTalk: false,
@@ -710,7 +710,8 @@ const ContentState = (props) => {
     hasOpenedBefore: false,
     qualityValue: "1080p",
     fpsValue: "30",
-    VideoAbout:false
+    VideoAbout:false,
+    limitexcied:false
   });
   contentStateRef.current = contentState;
 

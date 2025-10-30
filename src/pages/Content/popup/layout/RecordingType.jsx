@@ -13,6 +13,7 @@ import BackgroundEffects from "../components/BackgroundEffects";
 
 import { AlertIcon, TimeIcon,StopIcon, NoInternet } from "../../toolbar/components/SVG";
 import VideoAbout from "../../../VideoAbout/VideoAbout";
+import LimitExciedPop from "../../../Sandbox/LimitExciedPop/LimitExciedPop";
 
 const RecordingType = (props) => {
   const [contentState, setContentState] = useContext(contentStateContext);
@@ -63,14 +64,65 @@ const RecordingType = (props) => {
   }, [contentState.alarmTime]);
 
 // Start recording
-  const startStreaming = () => {
-    // setOpen((v) => !v)
-    // contentState.startStreaming();
-    setContentState((prevContentState) => ({
+  const startRecording = () => {
+     setContentState((prevContentState) => ({
         ...prevContentState,
         VideoAbout: true,
       }));
-      return <VideoAbout status={true}/>
+      return <VideoAbout />
+  }
+
+  
+
+
+
+  const startStreaming = () => {
+    chrome.storage.local.get(['SELLER_DETAILS'], async (result) => {
+    if (!result?.SELLER_DETAILS) {
+      console.log("No seller details saved yet.");
+      return;
+    }
+
+    try {
+      const SELLER_ID = result.SELLER_DETAILS?.SELLER_ID;
+      const ACCESS_TOKEN = result.SELLER_DETAILS?.ACCESS_TOKEN;
+
+      const header = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${ACCESS_TOKEN}`,
+      };
+
+      const body = JSON.stringify({ seller_id: SELLER_ID });
+
+   
+
+      // ✅ Prepare JSON file
+
+      // ✅ First API call: create studio_video_id
+      const response = await fetch("https://devbackend.demokraft.ai/studio/api/v1/studio/videos/validate_prj_limits", {
+        method: "POST",
+        headers: header,
+        body: body,
+      });
+
+      const resultStudio = await response.json();
+
+      if(resultStudio.status=="200"){
+      startRecording()
+      }else{
+         setContentState((prevContentState) => ({
+        ...prevContentState,
+        limitexcied: true,
+      }));
+       return <LimitExciedPop />
+
+      }
+     
+    } catch (err) {
+      console.error("Upload failed:", err);
+    }
+  });
+
   };
 
   useEffect(() => {
@@ -249,8 +301,8 @@ const RecordingType = (props) => {
                 },
                 () => {},
                 chrome.runtime.getURL("assets/helper/permissions.webp"),
-                chrome.i18n.getMessage("learnMoreDot"),
-                URL2,
+                // chrome.i18n.getMessage("learnMoreDot"),
+                // URL2,
                 true,
                 false
               );
@@ -334,89 +386,10 @@ const RecordingType = (props) => {
           {contentState.recordingShortcut}
         </span>
       </button>
-<div className="start-recording-footer">
-  <span>To stop recording.click the extension icon</span>
-   <StopIcon width="20" height="20"  />
-
-
-</div>
-
-    
-
-     <Dialog.Root open={open} onOpenChange={setOpen}>
-      <Dialog.Overlay
-         style={{
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        position: "fixed",
-        inset: 0,
-        zIndex: 999,
-      }}
-      />
-      <Dialog.Content
-    style={{
-        backgroundColor: "white",
-        borderRadius: "6px",
-        boxShadow: "0 10px 15px rgba(0,0,0,0.3)",
-        padding: "20px",
-        position: "fixed",
-        top: "50%",
-        left: "50%",
-        transform: "translate(-50%, -50%)",
-        minWidth: "300px",
-        zIndex: 1000,
-      }}
-  >
-   
-
-    <label
-      htmlFor="videoDescription"
-      style={{
-        display: "block",
-        marginTop: "20px",
-        marginBottom: "8px",
-        fontWeight: "bold",
-        fontSize: "14px",
-      }}
-    >
-      Can you tell us what is this video about?
-    </label>
-    <textarea
-      id="videoDescription"
-      rows={4}
-      placeholder="Write your description here..."
-      style={{
-        width: "100%",
-        padding: "8px",
-        fontSize: "14px",
-        borderRadius: "4px",
-        border: "1px solid #ccc",
-        resize: "vertical",
-      }}
-       value={description}
-          onChange={(e) => setDescription(e.target.value)}
-    />
-
-    <Dialog.Close asChild>
-      <button
-        style={{
-          marginTop: "20px",
-          padding: "8px 16px",
-          backgroundColor: "#ff9800",
-          color: "white",
-          border: "none",
-          borderRadius: "4px",
-          cursor: "pointer",
-          fontSize: "14px",
-        }}
-                  onClick={handleSubmit}
-
-      >
-        Submit
-      </button>
-    </Dialog.Close>
-  </Dialog.Content>
-      </Dialog.Root>
-
+      <div className="start-recording-footer">
+        <span>To stop recording,click the extension icon</span>
+        <StopIcon width="20" height="20"  />
+      </div>
 
       <Settings />
 

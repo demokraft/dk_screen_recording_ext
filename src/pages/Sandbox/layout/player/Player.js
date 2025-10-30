@@ -26,15 +26,20 @@ const Player = () => {
 
 useEffect(() => {
   if (contentState.videoUploadContentService) {
-    chrome.storage.local.clear(() => {
-      console.log("Extension local storage cleared");
-    let studioID=  encryptData(contentState?.studio_video_id)
+    chrome.storage.local.remove(["clickCoordinates", "savedTime"], () => {
+      let studioID = encryptData(contentState?.studio_video_id);
 
-      // Open external site in a new tab
-  chrome.tabs.create({ url: `https://devapp.demokraft.ai/studio?studio_video_id=${studioID}` }, () => {
-        // Close the extension popup after redirect
-        window.close();
-      });    });
+      // Get current active tab and update its URL
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]?.id) {
+          chrome.tabs.update(tabs[0].id, {
+            url: `https://app.demokraft.ai/studio?studio_video_id=${studioID}`
+          });
+        }
+      });
+
+      console.log("Selected keys removed and tab replaced");
+    });
   }
 }, [contentState.videoUploadContentService]);
 

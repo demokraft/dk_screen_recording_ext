@@ -368,12 +368,12 @@ const Backup = () => {
               {chrome.i18n.getMessage("backupsDescription1")}
               <br />
               {chrome.i18n.getMessage("backupsDescription2")}{" "}
-              <a
+              {/* <a
                 href="https://help.screenity.io/getting-started/77KizPC8MHVGfpKpqdux9D/what-are-backups-how-can-i-set-them-up/waYArvSwybZkJKKDdMXw1o"
                 target="_blank"
               >
                 {chrome.i18n.getMessage("learnMoreDot")}
-              </a>
+              </a> */}
             </div>
             <div className="setupActions">
               <button
@@ -435,12 +435,12 @@ const Backup = () => {
             </div>
             <div className="subtitle">
               {chrome.i18n.getMessage("backupsConfirmDescription")}{" "}
-              <a
+              {/* <a
                 href="https://help.screenity.io/getting-started/77KizPC8MHVGfpKpqdux9D/what-are-backups-how-can-i-set-them-up/waYArvSwybZkJKKDdMXw1o"
                 target="_blank"
               >
                 {chrome.i18n.getMessage("learnMoreDot")}
-              </a>
+              </a> */}
             </div>
 
             <div

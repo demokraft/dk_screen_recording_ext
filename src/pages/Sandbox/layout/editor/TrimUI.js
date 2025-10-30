@@ -131,11 +131,11 @@ const TrimUI = (props) => {
             {chrome.i18n.getMessage("sandboxEditorTrimInfo")}
             <div
               className={styles.trimInfoLink}
-              onClick={() => {
-                chrome.runtime.sendMessage({ type: "trim-info" });
-              }}
+              // onClick={() => {
+              //   chrome.runtime.sendMessage({ type: "trim-info" });
+              // }}
             >
-              {chrome.i18n.getMessage("learnMoreDot")}
+              {/* {chrome.i18n.getMessage("learnMoreDot")} */}
             </div>
           </div>
         </div>
@@ -149,11 +149,11 @@ const TrimUI = (props) => {
             {chrome.i18n.getMessage("sandboxEditorTooSmallInfo")}
             <div
               className={styles.trimInfoLink}
-              onClick={() => {
-                chrome.runtime.sendMessage({ type: "trim-info" });
-              }}
+              // onClick={() => {
+              //   chrome.runtime.sendMessage({ type: "trim-info" });
+              // }}
             >
-              {chrome.i18n.getMessage("learnMoreDot")}
+              {/* {chrome.i18n.getMessage("learnMoreDot")} */}
             </div>
           </div>
         </div>
