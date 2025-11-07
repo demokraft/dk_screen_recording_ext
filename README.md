@@ -1,3 +1,9 @@
+Demokraft AI screen recording extension is adapted version of Screenity screen recording chrome extension.
+So we have the public repo of our adapted version of the Screenity  screen recording chrome extension.
+
+We use only some features of the whole Screenity extension.
+----
+
 # Screenity
 [![jiewjjc232](https://github.com/alyssaxuu/screenity/assets/7581348/ed55e52e-4adf-442b-b774-6856abacdffb)](https://screenity.io)
 
