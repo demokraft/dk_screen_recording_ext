@@ -14,11 +14,91 @@ import BackgroundEffects from "../components/BackgroundEffects";
 import { AlertIcon, TimeIcon,StopIcon, NoInternet } from "../../toolbar/components/SVG";
 import VideoAbout from "../../../VideoAbout/VideoAbout";
 import LimitExciedPop from "../../../Sandbox/LimitExciedPop/LimitExciedPop";
+import LanguageDropdown from "../components/LanguageSelect";
 
 const RecordingType = (props) => {
   const [contentState, setContentState] = useContext(contentStateContext);
   const [cropActive, setCropActive] = useState(false);
      const [description, setDescription] = useState("");
+     const [language, setLanguage] = useState("English");
+
+     // Load saved language from Chrome storage on component mount
+   useEffect(() => {
+  console.log("1. Component mounted, loading language from SELLER_DETAILS...");
+
+  // Load from Chrome storage
+  chrome.storage.local.get(["SELLER_DETAILS"], (result) => {
+    console.log("2. Storage get result:", result);
+
+    const seller = result.SELLER_DETAILS || {};
+    const savedLang = seller.selectedLanguage;
+
+    const validLanguages = [
+      "Dutch", "English", "French", "German", "Hindi",
+      "Indonesian", "Italian", "Japanese", "Korean",
+      "Malay", "Portuguese", "Russian", "Spanish", "Turkish"
+    ];
+
+    if (savedLang) {
+      console.log("3. Found saved language:", savedLang);
+
+      if (validLanguages.includes(savedLang)) {
+        setLanguage(savedLang); // Valid → load it
+      } else {
+        console.warn("4. Invalid language found, defaulting to English");
+
+        setLanguage("English");
+
+        chrome.storage.local.set({
+          SELLER_DETAILS: {
+            ...seller,
+            selectedLanguage: "English"
+          }
+        });
+      }
+
+    } else {
+      console.log("5. No saved language → Setting English");
+
+      setLanguage("English");
+
+      chrome.storage.local.set({
+        SELLER_DETAILS: {
+          ...seller,
+          selectedLanguage: "English"
+        }
+      });
+    }
+  });
+
+  // Listen for storage changes (REAL-TIME sync)
+  const handleStorageChange = (changes, areaName) => {
+    if (areaName !== "local") return;
+
+    if (changes.SELLER_DETAILS) {
+      const newDetails = changes.SELLER_DETAILS.newValue;
+      const newLanguage = newDetails?.selectedLanguage;
+
+      if (newLanguage) {
+        console.log("6. Storage changed → Updating language:", newLanguage);
+        setLanguage(newLanguage);
+      }
+    }
+  };
+
+  chrome.storage.onChanged.addListener(handleStorageChange);
+
+  return () => {
+    console.log("7. Cleaning up storage listener");
+    chrome.storage.onChanged.removeListener(handleStorageChange);
+  };
+}, []);
+
+
+     // Log when language changes
+     useEffect(() => {
+       console.log('Current language state:', language);
+     }, [language]);
 
     const [open, setOpen] = useState(false);
 
@@ -35,11 +115,9 @@ const RecordingType = (props) => {
     const locale = chrome.i18n.getMessage("@@ui_locale");
     if (!locale.includes("en")) {
       setURL(
-        `https://translate.google.com/translate?sl=en&tl=${locale}&u=https://help.screenity.io/getting-started/77KizPC8MHVGfpKpqdux9D/what-are-the-technical-requirements-for-using-screenity/6kdB6qru6naVD8ZLFvX3m9`
-      );
+""      );
       setURL2(
-        `https://translate.google.com/translate?sl=en&tl=${locale}&u=https://help.screenity.io/troubleshooting/9Jy5RGjNrBB42hqUdREQ7W/how-to-grant-screenity-permission-to-record-your-camera-and-microphone/x6U69TnrbMjy5CQ96Er2E9`
-      );
+""      );
     }
   }, []);
 
@@ -99,7 +177,7 @@ const RecordingType = (props) => {
       // ✅ Prepare JSON file
 
       // ✅ First API call: create studio_video_id
-      const response = await fetch("https://devbackend.demokraft.ai/studio/api/v1/studio/videos/validate_prj_limits", {
+      const response = await fetch("https://backend.demokraft.ai/studio/api/v1/studio/videos/validate_prj_limits", {
         method: "POST",
         headers: header,
         body: body,
@@ -316,6 +394,25 @@ const RecordingType = (props) => {
       {contentState.microphonePermission && (
         <Dropdown type="mic" shadowRef={props.shadowRef} />
       )}
+
+       
+     
+      
+      <LanguageDropdown
+        value={language}
+        handleChange={(newLang) => {
+        
+          setLanguage(prevLang => {
+           
+            return newLang;
+          });
+        }}
+      />    
+      
+    
+
+
+
       {/* {((contentState.microphonePermission &&
         contentState.defaultAudioInput != "none" &&
         contentState.micActive) ||
@@ -390,6 +487,9 @@ const RecordingType = (props) => {
         <span>To stop recording,click the extension icon</span>
         <StopIcon width="20" height="20"  />
       </div>
+      
+        <span style={{fontSize:"12px",color:"#00000080",fontWeight:"bold"}}>Built using Screenity (GPLv3 License)</span>
+   
 
       <Settings />
 

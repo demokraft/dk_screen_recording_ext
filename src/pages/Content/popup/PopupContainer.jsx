@@ -65,8 +65,7 @@ const PopupContainer = (props) => {
     const locale = chrome.i18n.getMessage("@@ui_locale");
     if (!locale.includes("en")) {
       setURL(
-        `https://translate.google.com/translate?sl=en&tl=${locale}&u=https://help.screenity.io/`
-      );
+""      );
     }
   }, []);
 

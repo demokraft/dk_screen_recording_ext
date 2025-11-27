@@ -17,24 +17,18 @@ const ContentState = (props) => {
   const [timer, setTimer] = React.useState(0);
   const contentStateRef = useRef();
   const [URL, setURL] = useState(
-    "https://help.screenity.io/getting-started/77KizPC8MHVGfpKpqdux9D/why-does-screenity-ask-for-permissions/9AAE8zJ6iiUtCAtjn4SUT1"
-  );
+""  );
   const [URL2, setURL2] = useState(
-    "https://help.screenity.io/troubleshooting/9Jy5RGjNrBB42hqUdREQ7W/how-to-grant-screenity-permission-to-record-your-camera-and-microphone/x6U69TnrbMjy5CQ96Er2E9"
-  );
+""  );
 
   useEffect(() => {
     const locale = chrome.i18n.getMessage("@@ui_locale");
     if (!locale.includes("en")) {
       setURL(
-        "https://translate.google.com/translate?sl=en&tl=" +
-          locale +
-          "&u=https://help.screenity.io/getting-started/77KizPC8MHVGfpKpqdux9D/why-does-screenity-ask-for-permissions/9AAE8zJ6iiUtCAtjn4SUT1"
+       ""
       );
       setURL2(
-        "https://translate.google.com/translate?sl=en&tl=" +
-          locale +
-          "&u=https://help.screenity.io/troubleshooting/9Jy5RGjNrBB42hqUdREQ7W/how-to-grant-screenity-permission-to-record-your-camera-and-microphone/x6U69TnrbMjy5CQ96Er2E9"
+        ""
       );
     }
   }, []);
@@ -258,13 +252,10 @@ const ContentState = (props) => {
             // Add help link to modal
             const locale = chrome.i18n.getMessage("@@ui_locale");
             let helpURL =
-              "https://help.screenity.io/troubleshooting/9Jy5RGjNrBB42hqUdREQ7W/what-does-%E2%80%9Cmemory-limit-reached%E2%80%9D-mean-when-recording/8WkwHbt3puuXunYqQnyPcb";
-
+""
             if (!locale.includes("en")) {
               helpURL =
-                "https://translate.google.com/translate?sl=en&tl=" +
-                locale +
-                "&u=https://help.screenity.io/troubleshooting/9Jy5RGjNrBB42hqUdREQ7W/what-does-%E2%80%9Cmemory-limit-reached%E2%80%9D-mean-when-recording/8WkwHbt3puuXunYqQnyPcb";
+              ""
             }
 
             // Check if chunks collection exists and has data
@@ -573,6 +564,12 @@ const ContentState = (props) => {
       }
     }
   };
+
+
+
+ 
+
+
 
   const noMorePermissions = useCallback(() => {
     setContentState((prevContentState) => ({
@@ -1048,6 +1045,10 @@ const ContentState = (props) => {
       pendingRecording: contentState.pendingRecording,
     });
   }, [contentState.pendingRecording]);
+
+
+ 
+
 
   // Check if user has enough RAM to record for each quality option
   useEffect(() => {

@@ -545,8 +545,8 @@ function sendCombinedJsonToBackend() {
 
  useEffect(() => {
 
-  if (!contentState.webm && !contentState?.ready) return;
-
+  // Require both webm Blob and ready flag to avoid uploading before the Blob exists
+  if (!contentState?.webm && !contentState?.ready) return;
 
   chrome.storage.local.get(['SELLER_DETAILS'], async (result) => {
     if (!result?.SELLER_DETAILS) {
@@ -557,13 +557,14 @@ function sendCombinedJsonToBackend() {
     try {
       const ACCESS_TOKEN = result.SELLER_DETAILS?.ACCESS_TOKEN;
       const SELLER_ID = result.SELLER_DETAILS?.SELLER_ID;
+       const selectedLanguage = result.SELLER_DETAILS?.selectedLanguage;
 
       const header = {
         "Content-Type": "application/json",
         Authorization: `Bearer ${ACCESS_TOKEN}`,
       };
 
-      const body = JSON.stringify({ seller_id: SELLER_ID });
+      const body = JSON.stringify({ seller_id: SELLER_ID, recording_language:selectedLanguage??"English" });
 
    
 

@@ -5,7 +5,6 @@ export default function LimitExciedPop() {
 const [contentState, setContentState] = useContext(contentStateContext);
     
   const [open, setOpen] = useState(false);
-  console.log(contentState?.limitexcied,"limitexciedpopup")
 
 useEffect(()=>{
     if(contentState?.limitexcied==true)

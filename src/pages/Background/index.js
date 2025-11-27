@@ -1763,36 +1763,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     checkRecording();
   } else if (request.type === "review-screenity") {
     createTab(
-      "https://chrome.google.com/webstore/detail/screenity-screen-recorder/kbbdabhdfibnancpjfhlkhafgdilcnji/reviews",
-      false,
+"",      false,
       true
     );
   } else if (request.type === "follow-twitter") {
-    createTab("https://alyssax.substack.com/", false, true);
+    createTab("", false, true);
   } else if (request.type === "open-processing-info") {
     createTab(
-      "https://help.screenity.io/editing-and-exporting/dJRFpGq56JFKC7k8zEvsqb/why-is-there-a-5-minute-limit-for-editing/ddy4e4TpbnrFJ8VoRT37tQ",
-      true,
+"",      true,
       true
     );
   } else if (request.type === "upgrade-info") {
     createTab(
-      "https://help.screenity.io/getting-started/77KizPC8MHVGfpKpqdux9D/what-are-the-technical-requirements-for-using-screenity/6kdB6qru6naVD8ZLFvX3m9",
-      true,
+"",      true,
       true
     );
   } else if (request.type === "trim-info") {
     createTab(
-      "https://help.screenity.io/editing-and-exporting/dJRFpGq56JFKC7k8zEvsqb/how-to-cut-trim-or-mute-parts-of-your-video/svNbM7YHYY717MuSWXrKXH",
-      true,
+"",      true,
       true
     );
   } else if (request.type === "join-waitlist") {
     createTab("https://tally.so/r/npojNV", true, true);
   } else if (request.type === "chrome-update-info") {
     createTab(
-      "https://help.screenity.io/getting-started/77KizPC8MHVGfpKpqdux9D/what-are-the-technical-requirements-for-using-screenity/6kdB6qru6naVD8ZLFvX3m9",
-      true,
+"",      true,
       true
     );
   } else if (request.type === "set-surface") {
@@ -1808,17 +1803,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request.type === "open-help") {
     // createTab("https://help.screenity.io/", true, true);
   } else if (request.type === "memory-limit-help") {
-    createTab(
-      "https://help.screenity.io/troubleshooting/9Jy5RGjNrBB42hqUdREQ7W/what-does-%E2%80%9Cmemory-limit-reached%E2%80%9D-mean-when-recording/8WkwHbt3puuXunYqQnyPcb",
-      true,
-      true
-    );
+    // createTab(
+    //   "https://help.screenity.io/troubleshooting/9Jy5RGjNrBB42hqUdREQ7W/what-does-%E2%80%9Cmemory-limit-reached%E2%80%9D-mean-when-recording/8WkwHbt3puuXunYqQnyPcb",
+    //   true,
+    //   true
+    // );
   } else if (request.type === "open-home") {
-    createTab("https://screenity.io/", false, true);
+    createTab("", false, true);
   } else if (request.type === "report-bug") {
     createTab(
-      "https://tally.so/r/3ElpXq?version=" +
-        chrome.runtime.getManifest().version,
+     "",
       false,
       true
     );
