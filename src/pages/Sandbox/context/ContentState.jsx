@@ -72,8 +72,8 @@ const ContentState = (props) => {
     fallback: false,
     chunkCount: 0,
     chunkIndex: 0,
-    videoUploadContentService:false,
-    studio_video_id:null
+    videoUploadContentService: false,
+    studio_video_id: null
   };
 
   const [contentState, setContentState] = useState(defaultState);
@@ -199,10 +199,17 @@ const ContentState = (props) => {
   }, [contentState.blob]);
 
   const reconstructVideo = async () => {
+    // Validate chunks exist
+    if (videoChunks.current.length === 0) {
+      console.error("No video chunks available to reconstruct");
+      return;
+    }
+
+    console.log(`Reconstructing video with ${videoChunks.current.length} chunks`);
+
     const blob = new Blob(videoChunks.current, {
       type: "video/webm; codecs=vp8, opus",
     });
-
 
     const { recordingDuration } = await chrome.storage.local.get(
       "recordingDuration"
@@ -327,6 +334,7 @@ const ContentState = (props) => {
         reader.readAsDataURL(blob);
       }
     } catch (error) {
+      console.error("Error reconstructing video:", error);
       setContentState((prevState) => ({
         ...prevState,
         webm: blob,
@@ -346,8 +354,8 @@ const ContentState = (props) => {
             chrome.i18n.getMessage("memoryLimitDescription"),
             chrome.i18n.getMessage("understoodButton"),
             null,
-            () => {},
-            () => {},
+            () => { },
+            () => { },
             null,
             // chrome.i18n.getMessage("learnMoreDot"),
             () => {
@@ -369,35 +377,28 @@ const ContentState = (props) => {
 
 
   const handleBatch = async (chunks, sendResponse) => {
-    // Process chunks with a promise to ensure all async operations are completed
-    await Promise.all(
-      chunks.map(async (chunk) => {
+    // Process chunks sequentially to maintain order and avoid duplicates
+    try {
+      for (const chunk of chunks) {
         if (contentStateRef.current.chunkIndex >= chunkCount.current) {
           console.warn("Too many chunks received");
-          // Handling for too many chunks
-          return Promise.resolve(); // Resolve early for this case
+          break;
         }
 
         const chunkData = base64ToUint8Array(chunk.chunk);
         videoChunks.current.push(chunkData);
 
-        // Assuming setContentState doesn't need to be awaited
         setContentState((prevState) => ({
           ...prevState,
           chunkIndex: prevState.chunkIndex + 1,
         }));
-
-        return Promise.resolve(); // Resolve after processing each chunk
-      })
-    )
-      .then(() => {
-        // Only send response after all chunks are processed
-        sendResponse({ status: "ok" });
-      })
-      .catch((error) => {
-        console.error("Error processing batch", error);
-        // Handle error scenario, possibly notify sender of failure
-      });
+      }
+      // Send response after all chunks are processed
+      sendResponse({ status: "ok" });
+    } catch (error) {
+      console.error("Error processing batch", error);
+      sendResponse({ status: "error", error: error.message });
+    }
 
     return true; // Keep the messaging channel open for the response
   };
@@ -420,9 +421,15 @@ const ContentState = (props) => {
   const makeVideoTab = (sendResponse = null, message) => {
     if (makeVideoCheck.current) return;
     makeVideoCheck.current = true;
+
+    // Clear previous chunks to avoid mixing old data
+    videoChunks.current = [];
+    chunkCount.current = 0;
+
     setContentState((prevState) => ({
       ...prevState,
       override: message.override,
+      chunkIndex: 0, // Reset chunk index
     }));
     // All chunks received, reconstruct video
     checkMemory();
@@ -436,9 +443,15 @@ const ContentState = (props) => {
     (request, sender, sendResponse) => {
       const message = request;
       if (message.type === "chunk-count") {
+        // Reset for new recording session
+        videoChunks.current = [];
+        makeVideoCheck.current = false;
+        chunkCount.current = message.count;
+
         setContentState((prevState) => ({
           ...prevState,
           chunkCount: message.count,
+          chunkIndex: 0,
           override: message.override,
         }));
       } else if (message.type === "new-chunk-tab") {
@@ -495,134 +508,134 @@ const ContentState = (props) => {
 
 
 
-async function base64ToFile(base64String, prefix = "video") {
-  // Convert dataURL -> Blob
-  const res = await fetch(base64String);
-  const blob = await res.blob();
+  async function base64ToFile(base64String, prefix = "video") {
+    // Convert dataURL -> Blob
+    const res = await fetch(base64String);
+    const blob = await res.blob();
 
-  // Build a proper filename with correct extension
-  const timestamp = Date.now();
-  const ext = blob.type.split("/")[1] || "mp4"; // e.g. webm, mp4
-  const filename = `${prefix}_${timestamp}.${ext}`;
+    // Build a proper filename with correct extension
+    const timestamp = Date.now();
+    const ext = blob.type.split("/")[1] || "mp4"; // e.g. webm, mp4
+    const filename = `${prefix}_${timestamp}.${ext}`;
 
-  // Create File from Blob
-  return new File([blob], filename, { type: blob.type });
-}
-
-
-
-function sendCombinedJsonToBackend() {
-  return new Promise((resolve, reject) => {
-    chrome.storage.local.get(["videoDescription", "clickCoordinates","click"], (result) => {
-      if (chrome.runtime.lastError) return reject(chrome.runtime.lastError);
-
-      const data = {
-        videoDescription: result.videoDescription || "",
-        clickCoordinates: result.clickCoordinates || [],
-      
-      };
-
-      // Convert JSON → string
-      const jsonString = JSON.stringify(data, null, 2);
-
-      // Encode JSON → Base64
-      const base64Json = btoa(jsonString);
-
-      // Create filename
-      const timestamp = Date.now();
-      const fileName = `data_${timestamp}.json`;
-
-      // Create File object
-      const file = new File([base64Json], fileName, { type: "application/json" });
-
-      resolve(file);
-    });
-  });
-}
+    // Create File from Blob
+    return new File([blob], filename, { type: blob.type });
+  }
 
 
 
+  function sendCombinedJsonToBackend() {
+    return new Promise((resolve, reject) => {
+      chrome.storage.local.get(["videoDescription", "clickCoordinates", "click"], (result) => {
+        if (chrome.runtime.lastError) return reject(chrome.runtime.lastError);
 
- useEffect(() => {
+        const data = {
+          videoDescription: result.videoDescription || "",
+          clickCoordinates: result.clickCoordinates || [],
 
-  // Require both webm Blob and ready flag to avoid uploading before the Blob exists
-  if (!contentState?.webm && !contentState?.ready) return;
+        };
 
-  chrome.storage.local.get(['SELLER_DETAILS'], async (result) => {
-    if (!result?.SELLER_DETAILS) {
-      console.log("No seller details saved yet.");
-      return;
-    }
+        // Convert JSON → string
+        const jsonString = JSON.stringify(data, null, 2);
 
-    try {
-      const ACCESS_TOKEN = result.SELLER_DETAILS?.ACCESS_TOKEN;
-      const SELLER_ID = result.SELLER_DETAILS?.SELLER_ID;
-       const selectedLanguage = result.SELLER_DETAILS?.selectedLanguage;
+        // Encode JSON → Base64
+        const base64Json = btoa(jsonString);
 
-      const header = {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${ACCESS_TOKEN}`,
-      };
+        // Create filename
+        const timestamp = Date.now();
+        const fileName = `data_${timestamp}.json`;
 
-      const body = JSON.stringify({ seller_id: SELLER_ID, recording_language:selectedLanguage??"English" });
+        // Create File object
+        const file = new File([base64Json], fileName, { type: "application/json" });
 
-   
-
-      // ✅ Prepare JSON file
-      let jsonfile = await sendCombinedJsonToBackend();
-
-      // ✅ First API call: create studio_video_id
-      const response = await fetch("https://backend.demokraft.ai/studio/api/v1/studio/videos", {
-        method: "POST",
-        headers: header,
-        body: body,
+        resolve(file);
       });
+    });
+  }
 
-      const resultStudio = await response.json();
-      console.log(resultStudio, "full response");
 
-      const studio_video_id = resultStudio?.data?.studio_video_id;
-      if (!studio_video_id) {
-        console.error("No studio_video_id returned from API");
+
+
+  useEffect(() => {
+
+    // Require both webm Blob and ready flag to avoid uploading before the Blob exists
+    if (!contentState?.webm && !contentState?.ready) return;
+
+    chrome.storage.local.get(['SELLER_DETAILS'], async (result) => {
+      if (!result?.SELLER_DETAILS) {
+        console.log("No seller details saved yet.");
         return;
       }
 
-      // ✅ Prepare FormData
-      let formdata = new FormData();
-      formdata.append("videowebm", contentState.webm);
-      formdata.append("jsonfile", jsonfile);
-      formdata.append("studio_video_id", studio_video_id);
-      formdata.append("seller_id", SELLER_ID);
+      try {
+        const ACCESS_TOKEN = result.SELLER_DETAILS?.ACCESS_TOKEN;
+        const SELLER_ID = result.SELLER_DETAILS?.SELLER_ID;
+        const selectedLanguage = result.SELLER_DETAILS?.selectedLanguage;
 
+        const header = {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${ACCESS_TOKEN}`,
+        };
 
-      // ✅ Second API call: upload content
-      const responseContentService = await fetch("https://backend.demokraft.ai/content/v1/studio", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${ACCESS_TOKEN}`, // ⚠️ don't set Content-Type manually
-        },
-        body: formdata,
-      });
-
-      const resultContent = await responseContentService.json();
-
-            console.log(resultContent,"formdataformdataformdataformdata")
+        const body = JSON.stringify({ seller_id: SELLER_ID, recording_language: selectedLanguage ?? "English" });
 
 
 
+        // ✅ Prepare JSON file
+        let jsonfile = await sendCombinedJsonToBackend();
 
-      if (resultContent?.data) {
-        setContentState((prevState) => ({
-          ...prevState,
-          videoUploadContentService: true,
-          studio_video_id: studio_video_id,
-        }));
+        // ✅ First API call: create studio_video_id
+        const response = await fetch("https://backend.demokraft.ai/studio/api/v1/studio/videos", {
+          method: "POST",
+          headers: header,
+          body: body,
+        });
+
+        const resultStudio = await response.json();
+        console.log(resultStudio, "full response");
+
+        const studio_video_id = resultStudio?.data?.studio_video_id;
+        if (!studio_video_id) {
+          console.error("No studio_video_id returned from API");
+          return;
+        }
+
+        // ✅ Prepare FormData
+        let formdata = new FormData();
+        formdata.append("videowebm", contentState.webm);
+        formdata.append("jsonfile", jsonfile);
+        formdata.append("studio_video_id", studio_video_id);
+        formdata.append("seller_id", SELLER_ID);
+
+
+        // ✅ Second API call: upload content
+        const responseContentService = await fetch("https://backend.demokraft.ai/content/v1/studio", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${ACCESS_TOKEN}`, // ⚠️ don't set Content-Type manually
+          },
+          body: formdata,
+        });
+
+        const resultContent = await responseContentService.json();
+
+        console.log(resultContent, "formdataformdataformdataformdata")
+
+
+
+
+        if (resultContent?.data) {
+          setContentState((prevState) => ({
+            ...prevState,
+            videoUploadContentService: true,
+            studio_video_id: studio_video_id,
+          }));
+        }
+      } catch (err) {
+        console.error("Upload failed:", err);
       }
-    } catch (err) {
-      console.error("Upload failed:", err);
-    }
-  });
-}, [contentState.webm ,contentState.ready]);
+    });
+  }, [contentState.webm, contentState.ready]);
 
 
 
