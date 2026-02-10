@@ -354,15 +354,15 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 //
 
 chrome.runtime.onMessage.addListener((message, sender) => {
-    if (message.type === "SAVE_CLICK") {
-        console.log(message.data, "clickData");
+  if (message.type === "SAVE_CLICK") {
+    console.log(message.data, "clickData");
 
-        chrome.storage.local.get("clickCoordinates", (result) => {
-            const clickCoordinates = result.clickCoordinates || []; // Use the correct key
-            clickCoordinates.push(message.data);
-            chrome.storage.local.set({ clickCoordinates });
-        });
-    }
+    chrome.storage.local.get("clickCoordinates", (result) => {
+      const clickCoordinates = result.clickCoordinates || []; // Use the correct key
+      clickCoordinates.push(message.data);
+      chrome.storage.local.set({ clickCoordinates });
+    });
+  }
 });
 
 
@@ -398,8 +398,13 @@ const handleChunks = async (chunks, override = false) => {
     return;
   }
 
-  // Order chunks by timestamp
-  chunks.sort((a, b) => a.timestamp - b.timestamp);
+  // Order chunks by index (timestamp can be non-monotonic on long recordings)
+  chunks.sort((a, b) => {
+    const indexA = typeof a.index === "number" ? a.index : 0;
+    const indexB = typeof b.index === "number" ? b.index : 0;
+    if (indexA !== indexB) return indexA - indexB;
+    return (a.timestamp || 0) - (b.timestamp || 0);
+  });
 
   let currentIndex = 0;
   const batchSize = 10;
@@ -701,25 +706,25 @@ chrome.action.onClicked.addListener(async (tab) => {
 
   // === 🚀 Added COMPANY_ID capture logic ===
   if (tab.id) {
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-  const tab = tabs[0];
-  chrome.storage.local.get(["SELLER_DETAILS"], (res) => {
-  if (!res.SELLER_DETAILS) {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const tab = tabs[0];
+      chrome.storage.local.get(["SELLER_DETAILS"], (res) => {
+        if (!res.SELLER_DETAILS) {
 
-    chrome.tabs.create({ url: "https://app.demokraft.ai" });
-    return;
-  }
+          chrome.tabs.create({ url: "https://app.demokraft.ai" });
+          return;
+        }
 
-  // ✅ Already have SELLER_DETAILS → continue with logic
-  console.log("COMPANY_ID found:", res.SELLER_DETAILS);
+        // ✅ Already have SELLER_DETAILS → continue with logic
+        console.log("COMPANY_ID found:", res.SELLER_DETAILS);
 
-  // Example: use it immediately
-  // doSomething(res.SELLER_DETAILS);
-});
+        // Example: use it immediately
+        // doSomething(res.SELLER_DETAILS);
+      });
 
-});
+    });
 
-    
+
   }
 });
 
@@ -774,9 +779,9 @@ const getStreamingData = async () => {
 //     // Example action: perform some task with the received data
 //     const userToken = request.payload.token;
 //     console.log("Authenticating with token:", userToken);
-    
+
 //     // You could store the token, validate it, etc.
-    
+
 //     // Send a response back to the web app
 //     sendResponse({ success: true, message: "User authenticated successfully in extension." });
 //   }
@@ -924,7 +929,7 @@ const offscreenDocument = async (request, tabId = null) => {
     if (offscreenDocument) {
       await chrome.offscreen.closeDocument();
     }
-  } catch (error) {}
+  } catch (error) { }
 
   if (request.region) {
     if (tabId !== null) {
@@ -1125,7 +1130,7 @@ const discardOffscreenDocuments = async () => {
     if (offscreenDocument) {
       await chrome.offscreen.closeDocument();
     }
-  } catch (error) {}
+  } catch (error) { }
 };
 
 const executeScripts = async () => {
@@ -1455,17 +1460,14 @@ const handleSaveToDrive = async (sendResponse, request, fallback = false) => {
       chunks.push(value);
     });
 
-    // Build the video from chunks
-    let array = [];
-    let lastTimestamp = 0;
-    for (const chunk of chunks) {
-      // Check if chunk timestamp is smaller than last timestamp, if so, skip
-      if (chunk.timestamp < lastTimestamp) {
-        continue;
-      }
-      lastTimestamp = chunk.timestamp;
-      array.push(chunk.chunk);
-    }
+    // Build the video from chunks in index order
+    chunks.sort((a, b) => {
+      const indexA = typeof a.index === "number" ? a.index : 0;
+      const indexB = typeof b.index === "number" ? b.index : 0;
+      if (indexA !== indexB) return indexA - indexB;
+      return (a.timestamp || 0) - (b.timestamp || 0);
+    });
+    const array = chunks.map((chunk) => chunk.chunk);
     const blob = new Blob(array, { type: "video/webm" });
 
     const filename = request.title + ".webm";
@@ -1763,31 +1765,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     checkRecording();
   } else if (request.type === "review-screenity") {
     createTab(
-"",      false,
+      "", false,
       true
     );
   } else if (request.type === "follow-twitter") {
     createTab("", false, true);
   } else if (request.type === "open-processing-info") {
     createTab(
-"",      true,
+      "", true,
       true
     );
   } else if (request.type === "upgrade-info") {
     createTab(
-"",      true,
+      "", true,
       true
     );
   } else if (request.type === "trim-info") {
     createTab(
-"",      true,
+      "", true,
       true
     );
   } else if (request.type === "join-waitlist") {
     createTab("https://tally.so/r/npojNV", true, true);
   } else if (request.type === "chrome-update-info") {
     createTab(
-"",      true,
+      "", true,
       true
     );
   } else if (request.type === "set-surface") {
@@ -1812,7 +1814,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     createTab("", false, true);
   } else if (request.type === "report-bug") {
     createTab(
-     "",
+      "",
       false,
       true
     );
@@ -1879,7 +1881,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request.type === "extension-media-permissions") {
     createTab(
       "chrome://settings/content/siteDetails?site=chrome-extension://" +
-        chrome.runtime.id,
+      chrome.runtime.id,
       false,
       true
     );

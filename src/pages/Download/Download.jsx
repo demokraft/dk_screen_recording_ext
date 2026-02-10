@@ -57,12 +57,19 @@ const Download = () => {
         });
     } else if (message.type === "recover-indexed-db") {
       // Rewrite in localforage
-      const chunkArray = [];
+      const chunks = [];
       chunksStore
         .iterate((value, key, iterationNumber) => {
-          chunkArray.push(value.chunk);
+          chunks.push(value);
         })
         .then(() => {
+          chunks.sort((a, b) => {
+            const indexA = typeof a.index === "number" ? a.index : 0;
+            const indexB = typeof b.index === "number" ? b.index : 0;
+            if (indexA !== indexB) return indexA - indexB;
+            return (a.timestamp || 0) - (b.timestamp || 0);
+          });
+          const chunkArray = chunks.map((chunk) => chunk.chunk);
           const blob = new Blob(chunkArray, { type: "video/webm" });
           const url = URL.createObjectURL(blob);
           chrome.downloads

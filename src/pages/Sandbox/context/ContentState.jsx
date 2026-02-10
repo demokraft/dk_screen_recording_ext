@@ -16,6 +16,7 @@ const ContentState = (props) => {
   const videoChunks = useRef([]);
   const makeVideoCheck = useRef(false);
   const chunkCount = useRef(0);
+  const receivedChunkIndexes = useRef(new Set());
 
   const defaultState = {
     time: 0,
@@ -199,17 +200,10 @@ const ContentState = (props) => {
   }, [contentState.blob]);
 
   const reconstructVideo = async () => {
-    // Validate chunks exist
-    if (videoChunks.current.length === 0) {
-      console.error("No video chunks available to reconstruct");
-      return;
-    }
-
-    console.log(`Reconstructing video with ${videoChunks.current.length} chunks`);
-
     const blob = new Blob(videoChunks.current, {
       type: "video/webm; codecs=vp8, opus",
     });
+
 
     const { recordingDuration } = await chrome.storage.local.get(
       "recordingDuration"
@@ -334,7 +328,6 @@ const ContentState = (props) => {
         reader.readAsDataURL(blob);
       }
     } catch (error) {
-      console.error("Error reconstructing video:", error);
       setContentState((prevState) => ({
         ...prevState,
         webm: blob,
@@ -377,28 +370,43 @@ const ContentState = (props) => {
 
 
   const handleBatch = async (chunks, sendResponse) => {
-    // Process chunks sequentially to maintain order and avoid duplicates
-    try {
-      for (const chunk of chunks) {
-        if (contentStateRef.current.chunkIndex >= chunkCount.current) {
+    // Process chunks with a promise to ensure all async operations are completed
+    await Promise.all(
+      chunks.map(async (chunk) => {
+        const index = typeof chunk.index === "number" ? chunk.index : null;
+        if (
+          index === null ||
+          index < 0 ||
+          (chunkCount.current > 0 && index >= chunkCount.current)
+        ) {
           console.warn("Too many chunks received");
-          break;
+          // Handling for too many chunks
+          return Promise.resolve(); // Resolve early for this case
         }
 
         const chunkData = base64ToUint8Array(chunk.chunk);
-        videoChunks.current.push(chunkData);
+        if (!receivedChunkIndexes.current.has(index)) {
+          receivedChunkIndexes.current.add(index);
+        }
+        videoChunks.current[index] = chunkData;
 
+        // Assuming setContentState doesn't need to be awaited
         setContentState((prevState) => ({
           ...prevState,
-          chunkIndex: prevState.chunkIndex + 1,
+          chunkIndex: receivedChunkIndexes.current.size,
         }));
-      }
-      // Send response after all chunks are processed
-      sendResponse({ status: "ok" });
-    } catch (error) {
-      console.error("Error processing batch", error);
-      sendResponse({ status: "error", error: error.message });
-    }
+
+        return Promise.resolve(); // Resolve after processing each chunk
+      })
+    )
+      .then(() => {
+        // Only send response after all chunks are processed
+        sendResponse({ status: "ok" });
+      })
+      .catch((error) => {
+        console.error("Error processing batch", error);
+        // Handle error scenario, possibly notify sender of failure
+      });
 
     return true; // Keep the messaging channel open for the response
   };
@@ -421,15 +429,9 @@ const ContentState = (props) => {
   const makeVideoTab = (sendResponse = null, message) => {
     if (makeVideoCheck.current) return;
     makeVideoCheck.current = true;
-
-    // Clear previous chunks to avoid mixing old data
-    videoChunks.current = [];
-    chunkCount.current = 0;
-
     setContentState((prevState) => ({
       ...prevState,
       override: message.override,
-      chunkIndex: 0, // Reset chunk index
     }));
     // All chunks received, reconstruct video
     checkMemory();
@@ -443,11 +445,8 @@ const ContentState = (props) => {
     (request, sender, sendResponse) => {
       const message = request;
       if (message.type === "chunk-count") {
-        // Reset for new recording session
         videoChunks.current = [];
-        makeVideoCheck.current = false;
-        chunkCount.current = message.count;
-
+        receivedChunkIndexes.current = new Set();
         setContentState((prevState) => ({
           ...prevState,
           chunkCount: message.count,
@@ -455,7 +454,12 @@ const ContentState = (props) => {
           override: message.override,
         }));
       } else if (message.type === "new-chunk-tab") {
-        return handleBatch(message.chunks, sendResponse);
+        const chunks = Array.isArray(message.chunks)
+          ? message.chunks
+          : message.chunk
+            ? [message.chunk]
+            : [];
+        return handleBatch(chunks, sendResponse);
       } else if (message.type === "make-video-tab") {
         makeVideoTab(sendResponse, message);
 
@@ -557,9 +561,9 @@ const ContentState = (props) => {
 
 
   useEffect(() => {
-
     // Require both webm Blob and ready flag to avoid uploading before the Blob exists
-    if (!contentState?.webm && !contentState?.ready) return;
+    if (!contentState?.webm || !contentState?.ready) return;
+    if (contentState?.videoUploadContentService) return;
 
     chrome.storage.local.get(['SELLER_DETAILS'], async (result) => {
       if (!result?.SELLER_DETAILS) {
@@ -571,6 +575,10 @@ const ContentState = (props) => {
         const ACCESS_TOKEN = result.SELLER_DETAILS?.ACCESS_TOKEN;
         const SELLER_ID = result.SELLER_DETAILS?.SELLER_ID;
         const selectedLanguage = result.SELLER_DETAILS?.selectedLanguage;
+        if (!ACCESS_TOKEN || !SELLER_ID) {
+          console.error("Missing ACCESS_TOKEN or SELLER_ID");
+          return;
+        }
 
         const header = {
           "Content-Type": "application/json",
@@ -591,6 +599,9 @@ const ContentState = (props) => {
           body: body,
         });
 
+        if (!response.ok) {
+          throw new Error(`Studio API error: ${response.status}`);
+        }
         const resultStudio = await response.json();
         console.log(resultStudio, "full response");
 
@@ -617,6 +628,9 @@ const ContentState = (props) => {
           body: formdata,
         });
 
+        if (!responseContentService.ok) {
+          throw new Error(`Content API error: ${responseContentService.status}`);
+        }
         const resultContent = await responseContentService.json();
 
         console.log(resultContent, "formdataformdataformdataformdata")
