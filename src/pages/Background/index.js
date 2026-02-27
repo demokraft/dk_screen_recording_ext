@@ -54,9 +54,9 @@ const resetActiveTab = async () => {
     if (tab) {
       // Focus the window
       chrome.windows.update(tab.windowId, { focused: true }, async () => {
+        // `selected` is deprecated — `highlighted` is its replacement.
         chrome.tabs.update(activeTab, {
           active: true,
-          selected: true,
           highlighted: true,
         });
 
@@ -175,20 +175,27 @@ chrome.commands.onCommand.addListener(async (command) => {
 
 const handleAlarm = async (alarm) => {
   if (alarm.name === "recording-alarm") {
-    // Check if recording
-    const { recording } = await chrome.storage.local.get(["recording"]);
+    // Batch the two storage reads into one round-trip.
+    const { recording, activeTab } = await chrome.storage.local.get([
+      "recording",
+      "activeTab",
+    ]);
     if (recording) {
       stopRecording();
-
-      const { activeTab } = await chrome.storage.local.get(["activeTab"]);
 
       // Check if actual tab
       chrome.tabs.get(activeTab, (t) => {
         if (t) {
           sendMessageTab(activeTab, { type: "stop-recording-tab" });
         } else {
-          sendMessageTab(tab.id, { type: "stop-recording-tab" });
-          chrome.storage.local.set({ activeTab: tab.id });
+          getCurrentTab()
+            .then((fallbackTab) => {
+              if (fallbackTab && fallbackTab.id) {
+                sendMessageTab(fallbackTab.id, { type: "stop-recording-tab" });
+                chrome.storage.local.set({ activeTab: fallbackTab.id });
+              }
+            })
+            .catch(() => {});
         }
       });
     }
@@ -216,23 +223,35 @@ if (chrome.permissions) {
 }
 
 const onActivated = async (activeInfo) => {
-  const { recordingStartTime } = await chrome.storage.local.get([
+  // Batch all storage reads into a single round-trip.
+  const {
+    recordingStartTime,
+    recording,
+    restarting,
+    tabRecordedID,
+    region,
+    customRegion,
+    alarm,
+    alarmTime,
+  } = await chrome.storage.local.get([
     "recordingStartTime",
+    "recording",
+    "restarting",
+    "tabRecordedID",
+    "region",
+    "customRegion",
+    "alarm",
+    "alarmTime",
   ]);
-  // Get tab
-  const tab = await chrome.tabs.get(activeInfo.tabId);
 
-  // Check if not recording (needs to hide the extension)
-  const { recording } = await chrome.storage.local.get(["recording"]);
-  const { restarting } = await chrome.storage.local.get(["restarting"]);
+  // Get tab (can run in parallel with storage read but depends on tabId)
+  const tab = await chrome.tabs.get(activeInfo.tabId);
 
   // Update active tab
   if (recording) {
     // Check if region recording, and if the recording tab is the same as the current tab
-    const { tabRecordedID } = await chrome.storage.local.get(["tabRecordedID"]);
     if (tabRecordedID && tabRecordedID != activeInfo.tabId) {
       sendMessageTab(activeInfo.tabId, { type: "hide-popup-recording" });
-      // Check if active tab is not backup.html + chrome-extension://
     } else if (
       !(
         tab.url.includes("backup.html") &&
@@ -242,9 +261,6 @@ const onActivated = async (activeInfo) => {
       chrome.storage.local.set({ activeTab: activeInfo.tabId });
     }
 
-    // Check if region or customRegion is set
-    const { region } = await chrome.storage.local.get(["region"]);
-    const { customRegion } = await chrome.storage.local.get(["customRegion"]);
     if (!region && !customRegion) {
       sendMessageTab(activeInfo.tabId, { type: "recording-check" });
     }
@@ -253,18 +269,11 @@ const onActivated = async (activeInfo) => {
   }
 
   if (recordingStartTime) {
-    // Check if alarm
-    const { alarm } = await chrome.storage.local.get(["alarm"]);
     if (alarm) {
-      // Send remaining seconds
-      const { alarmTime } = await chrome.storage.local.get(["alarmTime"]);
       const seconds = parseFloat(alarmTime);
       const time = Math.floor((Date.now() - recordingStartTime) / 1000);
       const remaining = seconds - time;
-      sendMessageTab(activeInfo.tabId, {
-        type: "time",
-        time: remaining,
-      });
+      sendMessageTab(activeInfo.tabId, { type: "time", time: remaining });
     } else {
       const time = Math.floor((Date.now() - recordingStartTime) / 1000);
       sendMessageTab(activeInfo.tabId, { type: "time", time: time });
@@ -293,13 +302,25 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
   onActivated(activeInfo);
 });
 
-// Check when a user navigates to a different domain in the same tab (chrome.tabs?)
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+// Check when a user navigates to a different domain in the same tab
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, updatedTab) => {
   if (changeInfo.status === "complete") {
-    // Check if not recording (needs to hide the extension)
-    const { recording } = await chrome.storage.local.get(["recording"]);
-    const { restarting } = await chrome.storage.local.get(["restarting"]);
-    const { tabRecordedID } = await chrome.storage.local.get(["tabRecordedID"]);
+    // Batch all storage reads into one round-trip.
+    const {
+      recording,
+      restarting,
+      tabRecordedID,
+      recordingStartTime,
+      alarm,
+      alarmTime,
+    } = await chrome.storage.local.get([
+      "recording",
+      "restarting",
+      "tabRecordedID",
+      "recordingStartTime",
+      "alarm",
+      "alarmTime",
+    ]);
 
     if (!recording && !restarting) {
       sendMessageTab(tabId, { type: "recording-ended" });
@@ -307,25 +328,12 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       sendMessageTab(tabId, { type: "recording-check", force: true });
     }
 
-    const { recordingStartTime } = await chrome.storage.local.get([
-      "recordingStartTime",
-    ]);
-    // Get tab
-    const tab = await chrome.tabs.get(tabId);
-
     if (recordingStartTime) {
-      // Check if alarm
-      const { alarm } = await chrome.storage.local.get(["alarm"]);
       if (alarm) {
-        // Send remaining seconds
-        const { alarmTime } = await chrome.storage.local.get(["alarmTime"]);
         const seconds = parseFloat(alarmTime);
         const time = Math.floor((Date.now() - recordingStartTime) / 1000);
         const remaining = seconds - time;
-        sendMessageTab(tabId, {
-          type: "time",
-          time: remaining,
-        });
+        sendMessageTab(tabId, { type: "time", time: remaining });
       } else {
         const time = Math.floor((Date.now() - recordingStartTime) / 1000);
         sendMessageTab(tabId, { type: "time", time: time });
@@ -333,33 +341,14 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     }
 
     const commands = await chrome.commands.getAll();
-    sendMessageTab(tabId, {
-      type: "commands",
-      commands: commands,
-    });
+    sendMessageTab(tabId, { type: "commands", commands: commands });
 
     // Check if tab is playground.html
-    if (
-      tab.url.includes(chrome.runtime.getURL("playground.html")) &&
-      changeInfo.status === "complete"
-    ) {
-      sendMessageTab(tab.id, { type: "toggle-popup" });
+    if (updatedTab.url.includes(chrome.runtime.getURL("playground.html"))) {
+      sendMessageTab(updatedTab.id, { type: "toggle-popup" });
     }
   }
 });
-
-function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = function () {
-      resolve(reader.result);
-    };
-    reader.onerror = function (error) {
-      reject(error);
-    };
-    reader.readAsDataURL(blob);
-  });
-}
 
 const handleChunks = async (chunks, override = false) => {
   const { sendingChunks, sandboxTab } = await chrome.storage.local.get([
@@ -409,7 +398,8 @@ const handleChunks = async (chunks, override = false) => {
           `Sending batch failed, retrying... Attempt ${retryCount + 1}`,
           error
         );
-        setTimeout(() => sendBatch(batch, retryCount + 1), retryDelay);
+        await new Promise((resolve) => setTimeout(resolve, retryDelay));
+        await sendBatch(batch, retryCount + 1);
       } else {
         console.error("Maximum retry attempts reached for this batch.", error);
       }
@@ -418,22 +408,13 @@ const handleChunks = async (chunks, override = false) => {
 
   while (currentIndex < chunksCount) {
     const end = Math.min(currentIndex + batchSize, chunksCount);
-    const batch = await Promise.all(
-      chunks.slice(currentIndex, end).map(async (chunk, index) => {
-        try {
-          const base64 = await blobToBase64(chunk.chunk);
-          return { chunk: base64, index: currentIndex + index };
-        } catch (error) {
-          console.error("Error converting chunk to Base64", error);
-          return null;
-        }
-      })
-    );
+    const batch = chunks.slice(currentIndex, end).map((chunk, index) => ({
+      chunk: chunk.chunk,
+      index: currentIndex + index,
+    }));
 
-    // Filter out any failed conversions
-    const filteredBatch = batch.filter((chunk) => chunk !== null);
-    if (filteredBatch.length > 0) {
-      await sendBatch(filteredBatch);
+    if (batch.length > 0) {
+      await sendBatch(batch);
     }
     currentIndex += batchSize;
   }
@@ -450,7 +431,13 @@ const sendChunks = async (override = false) => {
     });
     handleChunks(chunks, override);
   } catch (error) {
-    chrome.runtime.reload();
+    // Chunk iteration failed — attempt recovery via the download fallback
+    // rather than reloading the entire extension (which loses all state).
+    console.error("sendChunks: failed to read chunks from IndexedDB", error);
+    const { sandboxTab } = await chrome.storage.local.get(["sandboxTab"]);
+    if (sandboxTab) {
+      sendMessageTab(sandboxTab, { type: "restore-recording" });
+    }
   }
 };
 
@@ -815,84 +802,42 @@ const offscreenDocument = async (request, tabId = null) => {
         region: true,
       });
     } else {
-      try {
-        // This is following the steps from this page, but it still doesn't work :( https://developer.chrome.com/docs/extensions/mv3/screen_capture/#audio-and-video-offscreen-doc
-        throw new Error("Exit offscreen recording");
-        const existingContexts = await chrome.runtime.getContexts({});
-
-        const offDocument = existingContexts.find(
-          (c) => c.contextType === "OFFSCREEN_DOCUMENT"
-        );
-
-        if (offDocument) {
-          // If an offscreen document is already open, close it.
-          await chrome.offscreen.closeDocument();
-        }
-
-        // Create an offscreen document.
-        await chrome.offscreen.createDocument({
-          url: "recorderoffscreen.html",
-          reasons: ["USER_MEDIA", "AUDIO_PLAYBACK", "DISPLAY_MEDIA"],
-          justification:
-            "Recording from getDisplayMedia API and tabCapture API",
-        });
-
-        const streamId = await chrome.tabCapture.getMediaStreamId({
-          targetTabId: activeTab.id,
-        });
-
-        chrome.storage.local.set({
-          recordingTab: null,
-          offscreen: true,
-          region: false,
-          wasRegion: true,
-        });
-        sendMessageRecord({
-          type: "loaded",
-          request: request,
-          isTab: true,
-          tabID: streamId,
-        });
-      } catch (error) {
-        // Open the recorder.html page as a normal tab.
-        chrome.tabs
-          .create({
-            url: "recorder.html",
-            pinned: true,
-            index: 0,
-            active: activeTab.url.includes(
-              chrome.runtime.getURL("playground.html")
-            )
-              ? true
-              : false,
-          })
-          .then((tab) => {
-            chrome.storage.local.set({
-              recordingTab: tab.id,
-              offscreen: false,
-              region: false,
-              wasRegion: true,
-              tabRecordedID: activeTab.id,
-            });
-            chrome.tabs.onUpdated.addListener(function _(
-              tabId,
-              changeInfo,
-              updatedTab
-            ) {
-              // Check if recorder tab has finished loading
-              if (tabId === tab.id && changeInfo.status === "complete") {
-                chrome.tabs.onUpdated.removeListener(_);
-                sendMessageRecord({
-                  type: "loaded",
-                  request: request,
-                  tabID: activeTab.id,
-                  backup: backup,
-                  isTab: true,
-                });
-              }
-            });
+      // Region recording via recorder.html tab (offscreen document path was
+      // attempted but does not work for this capture scenario).
+      chrome.tabs
+        .create({
+          url: "recorder.html",
+          pinned: true,
+          index: 0,
+          active: activeTab.url.includes(
+            chrome.runtime.getURL("playground.html")
+          ),
+        })
+        .then((tab) => {
+          chrome.storage.local.set({
+            recordingTab: tab.id,
+            offscreen: false,
+            region: false,
+            wasRegion: true,
+            tabRecordedID: activeTab.id,
           });
-      }
+          chrome.tabs.onUpdated.addListener(function _(
+            tabId,
+            changeInfo,
+            updatedTab
+          ) {
+            if (tabId === tab.id && changeInfo.status === "complete") {
+              chrome.tabs.onUpdated.removeListener(_);
+              sendMessageRecord({
+                type: "loaded",
+                request: request,
+                tabID: activeTab.id,
+                backup: backup,
+                isTab: true,
+              });
+            }
+          });
+        });
     }
   } else {
     try {
@@ -1253,20 +1198,17 @@ const restoreRecording = async () => {
       url: editor_url,
       active: true,
     },
-    async (tab) => {
+    (tab) => {
       // Set URL as sandbox tab
       chrome.storage.local.set({ sandboxTab: tab.id });
-      // Wait for the tab to be loaded
-      await new Promise((resolve) => {
-        chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
-          if (info.status === "complete" && tabId === tab.id) {
-            sendMessageTab(tab.id, {
-              type: "restore-recording",
-            });
-
-            sendChunks();
-          }
-        });
+      chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
+        if (info.status === "complete" && tabId === tab.id) {
+          chrome.tabs.onUpdated.removeListener(listener);
+          sendMessageTab(tab.id, {
+            type: "restore-recording",
+          });
+          sendChunks();
+        }
       });
     }
   );
@@ -1391,7 +1333,7 @@ const videoReady = async () => {
   stopRecording();
 };
 
-const newChunk = async (request) => {
+const newChunk = async (request, sendResponse) => {
   const { sandboxTab } = await chrome.storage.local.get(["sandboxTab"]);
   sendMessageTab(sandboxTab, {
     type: "new-chunk-tab",
@@ -1399,7 +1341,9 @@ const newChunk = async (request) => {
     index: request.index,
   });
 
-  sendResponse({ status: "ok" });
+  if (typeof sendResponse === "function") {
+    sendResponse({ status: "ok" });
+  }
 };
 
 const handleGetStreamingData = async () => {
@@ -1576,7 +1520,19 @@ const resizeWindow = async (width, height) => {
 
 const checkAvailableMemory = (sendResponse) => {
   navigator.storage.estimate().then((data) => {
-    sendResponse({ data: data });
+    const quota = data?.quota || 0;
+    const usage = data?.usage || 0;
+    sendResponse({
+      quota: quota,
+      usage: usage,
+      available: Math.max(0, quota - usage),
+    });
+  }).catch(() => {
+    sendResponse({
+      quota: 0,
+      usage: 0,
+      available: 0,
+    });
   });
 };
 
@@ -1605,7 +1561,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request.type === "restarted") {
     restartActiveTab();
   } else if (request.type === "new-chunk") {
-    newChunk(request);
+    newChunk(request, sendResponse);
     return true;
   } else if (request.type === "get-streaming-data") {
     handleGetStreamingData();
@@ -1761,6 +1717,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     );
   } else if (request.type === "add-alarm-listener") {
     addAlarmListener();
+  } else if (request.type === "discard-offscreen") {
+    // RecorderOffscreen signals that it has finished cleanup and the background
+    // should close the offscreen document (window.close() has no effect there).
+    discardOffscreenDocuments();
   }
 });
 

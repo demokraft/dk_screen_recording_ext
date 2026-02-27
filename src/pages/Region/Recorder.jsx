@@ -66,6 +66,7 @@ const Recorder = () => {
   // Receive post message from parent (this is an iframe)
   useEffect(() => {
     const onMessage = (event) => {
+      if (event.source !== window.parent) return;
       if (event.data.type === "crop-target") {
         target.current = event.data.target;
         regionRef.current = true;
@@ -73,9 +74,7 @@ const Recorder = () => {
         restartRecording();
       }
     };
-    window.addEventListener("message", (event) => {
-      onMessage(event);
-    });
+    window.addEventListener("message", onMessage);
 
     return () => {
       window.removeEventListener("message", onMessage);
@@ -89,7 +88,7 @@ const Recorder = () => {
     isFinishing.current = false;
     sentLast.current = false;
     lastTimecode.current = 0;
-    hasChunks.current = 0;
+    hasChunks.current = false;
     isFinished.current = false;
     // Check if the stream actually has data in it
     try {
@@ -243,8 +242,9 @@ const Recorder = () => {
       try {
         navigator.storage.estimate().then((data) => {
           const minMemory = 26214400;
+          const available = (data?.quota || 0) - (data?.usage || 0);
           // Check if there's enough space to keep recording
-          if (data.quota < minMemory) {
+          if (available < minMemory) {
             chrome.storage.local.set({
               recording: false,
               restarting: false,
@@ -378,6 +378,31 @@ const Recorder = () => {
     };
   }
 
+  const releaseStreams = () => {
+    if (liveStream.current !== null) {
+      liveStream.current.getTracks().forEach((track) => track.stop());
+      liveStream.current = null;
+    }
+    if (helperVideoStream.current !== null) {
+      helperVideoStream.current.getTracks().forEach((track) => track.stop());
+      helperVideoStream.current = null;
+    }
+    if (helperAudioStream.current !== null) {
+      helperAudioStream.current.getTracks().forEach((track) => track.stop());
+      helperAudioStream.current = null;
+    }
+    // Close AudioContext to release system audio resources and free RAM.
+    if (aCtx.current !== null) {
+      aCtx.current.close().catch(() => {});
+      aCtx.current = null;
+    }
+    destination.current = null;
+    audioInputSource.current = null;
+    audioOutputSource.current = null;
+    audioInputGain.current = null;
+    audioOutputGain.current = null;
+  };
+
   async function stopRecording() {
     isFinishing.current = true;
     regionRef.current = false;
@@ -386,27 +411,7 @@ const Recorder = () => {
       recorder.current.stop();
       recorder.current = null;
     }
-
-    if (liveStream.current !== null) {
-      liveStream.current.getTracks().forEach(function (track) {
-        track.stop();
-      });
-      liveStream.current = null;
-    }
-
-    if (helperVideoStream.current !== null) {
-      helperVideoStream.current.getTracks().forEach(function (track) {
-        track.stop();
-      });
-      helperVideoStream.current = null;
-    }
-
-    if (helperAudioStream.current !== null) {
-      helperAudioStream.current.getTracks().forEach(function (track) {
-        track.stop();
-      });
-      helperAudioStream.current = null;
-    }
+    releaseStreams();
   }
 
   const dismissRecording = async () => {
@@ -418,26 +423,7 @@ const Recorder = () => {
       recorder.current.stop();
       recorder.current = null;
     }
-    if (liveStream.current !== null) {
-      liveStream.current.getTracks().forEach(function (track) {
-        track.stop();
-      });
-      liveStream.current = null;
-    }
-
-    if (helperVideoStream.current !== null) {
-      helperVideoStream.current.getTracks().forEach(function (track) {
-        track.stop();
-      });
-      helperVideoStream.current = null;
-    }
-
-    if (helperAudioStream.current !== null) {
-      helperAudioStream.current.getTracks().forEach(function (track) {
-        track.stop();
-      });
-      helperAudioStream.current = null;
-    }
+    releaseStreams();
   };
 
   const restartRecording = async () => {
@@ -455,35 +441,15 @@ const Recorder = () => {
   };
 
   async function startAudioStream(id) {
-    const audioStreamOptions = {
-      mimeType: "video/webm;codecs=vp8,opus",
-      audio: {
-        deviceId: {
-          exact: id,
-        },
-      },
-    };
-
     const result = await navigator.mediaDevices
-      .getUserMedia(audioStreamOptions)
-      .then((stream) => {
-        return stream;
-      })
-      .catch((err) => {
-        // Try again without the device ID
-        const audioStreamOptions = {
-          mimeType: "video/webm;codecs=vp8,opus",
-          audio: true,
-        };
-
+      .getUserMedia({ audio: { deviceId: { exact: id } } })
+      .then((stream) => stream)
+      .catch(() => {
+        // Device ID not found or unavailable — fall back to default mic.
         return navigator.mediaDevices
-          .getUserMedia(audioStreamOptions)
-          .then((stream) => {
-            return stream;
-          })
-          .catch((err) => {
-            return null;
-          });
+          .getUserMedia({ audio: true })
+          .then((stream) => stream)
+          .catch(() => null);
       });
 
     return result;
@@ -651,15 +617,17 @@ const Recorder = () => {
   }
 
   useEffect(() => {
-    window.addEventListener("beforeunload", (e) => {
+    const handleBeforeUnload = (e) => {
       if (recordingRef.current && regionRef.current) {
         e.preventDefault();
         e.returnValue = "";
-
-        // Save and stop recording
         stopRecording();
       }
-    });
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
   }, []);
 
   const setMic = async (result) => {
@@ -707,7 +675,8 @@ const Recorder = () => {
         dismissRecording();
       }
     },
-    [regionRef.current, isFinishing.current, recorder.current]
+    // Refs are read at call-time — stable [] deps.
+    []
   );
 
   useEffect(() => {

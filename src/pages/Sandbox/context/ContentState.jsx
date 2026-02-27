@@ -107,21 +107,33 @@ const ContentState = (props) => {
 
   // Show a popup when attempting to close the tab if the user has not downloaded their video
   useEffect(() => {
-    if (!contentState.saved) {
-      window.onbeforeunload = function () {
-        return true;
-      };
-    } else {
-      window.onbeforeunload = null;
-    }
-  }, [contentState.saved]);
+    const handleBeforeUnload = (e) => {
+      if (!contentStateRef.current.saved) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, []);
 
+  const MAX_HISTORY = 20;
   const addToHistory = useCallback(() => {
-    setContentState((prevState) => ({
-      ...prevState,
-      history: [...prevState.history, prevState],
-      redoHistory: [], // Clear redo history when a new state is added
-    }));
+    setContentState((prevState) => {
+      const newHistory = [...prevState.history, prevState];
+      // Cap history depth to avoid unbounded RAM growth during long editing sessions.
+      const trimmed =
+        newHistory.length > MAX_HISTORY
+          ? newHistory.slice(newHistory.length - MAX_HISTORY)
+          : newHistory;
+      return {
+        ...prevState,
+        history: trimmed,
+        redoHistory: [],
+      };
+    });
   }, [contentState]);
 
   const undo = useCallback(() => {
@@ -366,29 +378,30 @@ const ContentState = (props) => {
       chunks.map(async (chunk) => {
         if (contentStateRef.current.chunkIndex >= chunkCount.current) {
           console.warn("Too many chunks received");
-          // Handling for too many chunks
-          return Promise.resolve(); // Resolve early for this case
+          return Promise.resolve();
         }
 
-        const chunkData = base64ToUint8Array(chunk.chunk);
+        const chunkData =
+          chunk.chunk instanceof Blob
+            ? chunk.chunk
+            : base64ToUint8Array(chunk.chunk);
         videoChunks.current.push(chunkData);
 
-        // Assuming setContentState doesn't need to be awaited
         setContentState((prevState) => ({
           ...prevState,
           chunkIndex: prevState.chunkIndex + 1,
         }));
 
-        return Promise.resolve(); // Resolve after processing each chunk
+        return Promise.resolve();
       })
     )
       .then(() => {
-        // Only send response after all chunks are processed
         sendResponse({ status: "ok" });
       })
       .catch((error) => {
         console.error("Error processing batch", error);
-        // Handle error scenario, possibly notify sender of failure
+        // Always respond so the background retry loop can react.
+        sendResponse({ status: "error" });
       });
 
     return true; // Keep the messaging channel open for the response
@@ -434,7 +447,12 @@ const ContentState = (props) => {
           override: message.override,
         }));
       } else if (message.type === "new-chunk-tab") {
-        return handleBatch(message.chunks, sendResponse);
+        const chunks = Array.isArray(message.chunks)
+          ? message.chunks
+          : message.chunk
+          ? [{ chunk: message.chunk, index: message.index }]
+          : [];
+        return handleBatch(chunks, sendResponse);
       } else if (message.type === "make-video-tab") {
         makeVideoTab(sendResponse, message);
 
@@ -607,16 +625,28 @@ const ContentState = (props) => {
     }
   };
 
-  // Listen to PostMessage events
+  // Listen to PostMessage events — use a stable named ref so removeEventListener
+  // receives the exact same function object it registered.
+  const onMessageRef = useRef(null);
   useEffect(() => {
-    window.addEventListener("message", (event) => {
-      onMessage(event);
-    });
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
 
+  useEffect(() => {
+    const handler = (event) => {
+      // Only accept messages from the same extension origin (editor sandbox
+      // lives inside an extension page, so parent is always same origin).
+      if (
+        event.source !== window.parent &&
+        event.source !== window
+      ) {
+        return;
+      }
+      if (onMessageRef.current) onMessageRef.current(event);
+    };
+    window.addEventListener("message", handler);
     return () => {
-      window.removeEventListener("message", (event) => {
-        onMessage(event);
-      });
+      window.removeEventListener("message", handler);
     };
   }, []);
 
@@ -834,14 +864,17 @@ const ContentState = (props) => {
         saveAs: true,
       });
 
-      // Check if download failed
-      chrome.downloads.onChanged.addListener(async (downloadDelta) => {
+      // Listen for interrupted downloads and fall back to background download.
+      // The listener is registered once per download and removes itself after
+      // the first relevant event, preventing listener accumulation.
+      const onDownloadChanged = async (downloadDelta) => {
+        if (!downloadDelta.state) return;
         if (
-          downloadDelta.state &&
           downloadDelta.state.current === "interrupted" &&
-          downloadDelta.error.current != "USER_CANCELED"
+          downloadDelta.error &&
+          downloadDelta.error.current !== "USER_CANCELED"
         ) {
-          // Convert URL to base64
+          chrome.downloads.onChanged.removeListener(onDownloadChanged);
           const response = await fetch(url);
           const blob = await response.blob();
           const reader = new FileReader();
@@ -854,12 +887,17 @@ const ContentState = (props) => {
             });
           };
           URL.revokeObjectURL(url);
-          return;
-        } else {
+        } else if (
+          downloadDelta.state.current === "complete" ||
+          (downloadDelta.state.current === "interrupted" &&
+            downloadDelta.error &&
+            downloadDelta.error.current === "USER_CANCELED")
+        ) {
+          chrome.downloads.onChanged.removeListener(onDownloadChanged);
           URL.revokeObjectURL(url);
-          return;
         }
-      });
+      };
+      chrome.downloads.onChanged.addListener(onDownloadChanged);
     }
   };
 

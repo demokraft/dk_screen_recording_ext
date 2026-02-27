@@ -215,6 +215,10 @@ const ContentState = (props) => {
           type: "check-capture-permissions",
         },
         (response) => {
+          if (chrome.runtime.lastError || !response) {
+            resolve(false);
+            return;
+          }
           if (response.status === "ok") {
             resolve(true);
           } else {
@@ -229,8 +233,9 @@ const ContentState = (props) => {
     chrome.runtime
       .sendMessage({ type: "available-memory" })
       .then(async (data) => {
+        const available = data?.available ?? 0;
         // Check if there's enough space to keep recording
-        if (data.quota < 524288000) {
+        if (available < 524288000) {
           if (typeof contentStateRef.current.openModal === "function") {
             let clear = null;
             let clearAction = () => {};
@@ -486,6 +491,47 @@ const ContentState = (props) => {
         microphonePermission: microphonePermission,
       }));
 
+      // Self-heal device defaults when profiles/devices change and saved IDs become stale.
+      const updates = {};
+      const currentDefaultAudio = contentStateRef.current.defaultAudioInput;
+      const currentDefaultVideo = contentStateRef.current.defaultVideoInput;
+      const audioExists = audioInput.some(
+        (device) => device.deviceId === currentDefaultAudio
+      );
+      const videoExists = videoInput.some(
+        (device) => device.deviceId === currentDefaultVideo
+      );
+
+      if (audioInput.length === 0) {
+        updates.defaultAudioInput = "none";
+        updates.micActive = false;
+      } else if (
+        currentDefaultAudio === "none" ||
+        currentDefaultAudio == null ||
+        !audioExists
+      ) {
+        updates.defaultAudioInput = audioInput[0].deviceId;
+      }
+
+      if (videoInput.length === 0) {
+        updates.defaultVideoInput = "none";
+        updates.cameraActive = false;
+      } else if (
+        currentDefaultVideo === "none" ||
+        currentDefaultVideo == null ||
+        !videoExists
+      ) {
+        updates.defaultVideoInput = videoInput[0].deviceId;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        setContentState((prevContentState) => ({
+          ...prevContentState,
+          ...updates,
+        }));
+        chrome.storage.local.set(updates);
+      }
+
       chrome.runtime.sendMessage({
         type: "switch-camera",
         id: contentStateRef.current.defaultVideoInput,
@@ -528,12 +574,16 @@ const ContentState = (props) => {
         }
       }
     } else {
+      const isDenied =
+        data?.error === "permissions-denied" || data?.error === "NotAllowedError";
       setContentState((prevContentState) => ({
         ...prevContentState,
-        cameraPermission: false,
-        microphonePermission: false,
+        cameraPermission: isDenied ? false : prevContentState.cameraPermission,
+        microphonePermission: isDenied
+          ? false
+          : prevContentState.microphonePermission,
       }));
-      if (contentStateRef.current.askForPermissions) {
+      if (isDenied && contentStateRef.current.askForPermissions) {
         contentStateRef.current.openModal(
           chrome.i18n.getMessage("permissionsModalTitle"),
           chrome.i18n.getMessage("permissionsModalDescription"),
@@ -658,7 +708,7 @@ const ContentState = (props) => {
     microphonePermission: true,
     askMicrophone: true,
     recordingShortcut: "⌥⇧W",
-    recordingShortcut: "⌥⇧D",
+    dismissRecordingShortcut: "⌥⇧D",
     cursorMode: "none",
     shape: "rectangle",
     shapeFill: false,
@@ -998,7 +1048,10 @@ const ContentState = (props) => {
         );
       } else if (request.type === "recording-check") {
         if (!request.force) {
-          if (!contentStateRef.showExtension && !contentStateRef.recording) {
+          if (
+            !contentStateRef.current.showExtension &&
+            !contentStateRef.current.recording
+          ) {
             updateFromStorage(true, sender.id);
           }
         } else if (request.force) {
@@ -1249,7 +1302,9 @@ const ContentState = (props) => {
     chrome.storage.local.get(
       [
         "audioInput",
+        "audioinput",
         "videoInput",
+        "videoinput",
         "defaultAudioInput",
         "defaultVideoInput",
         "cameraDimensions",
@@ -1301,10 +1356,14 @@ const ContentState = (props) => {
           audioInput:
             result.audioInput !== undefined && result.audioInput !== null
               ? result.audioInput
+              : result.audioinput !== undefined && result.audioinput !== null
+              ? result.audioinput
               : prevContentState.audioInput,
           videoInput:
             result.videoInput !== undefined && result.videoInput !== null
               ? result.videoInput
+              : result.videoinput !== undefined && result.videoinput !== null
+              ? result.videoinput
               : prevContentState.videoInput,
           defaultAudioInput:
             result.defaultAudioInput !== undefined &&

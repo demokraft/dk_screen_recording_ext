@@ -101,7 +101,7 @@ var options = {
           {
             loader: "sass-loader",
             options: {
-              sourceMap: true,
+              sourceMap: env.NODE_ENV === "development",
             },
           },
         ],
@@ -191,6 +191,14 @@ var options = {
           from: "src/assets/",
           to: path.join(__dirname, "build/assets"),
           force: true,
+          globOptions: {
+            ignore: [
+              "**/*.map",
+              "**/README.md",
+              "**/package.json",
+              "**/index.d.ts",
+            ],
+          },
         },
       ],
     }),

@@ -76,7 +76,7 @@ const Recorder = () => {
     chunksStore.clear();
 
     lastTimecode.current = 0;
-    hasChunks.current = 0;
+    hasChunks.current = false;
 
     try {
       const { qualityValue } = await chrome.storage.local.get(["qualityValue"]);
@@ -178,8 +178,9 @@ const Recorder = () => {
       try {
         navigator.storage.estimate().then((data) => {
           const minMemory = 26214400;
+          const available = (data?.quota || 0) - (data?.usage || 0);
           // Check if there's enough space to keep recording
-          if (data.quota < minMemory) {
+          if (available < minMemory) {
             chrome.storage.local.set({
               recording: false,
               restarting: false,
@@ -277,33 +278,38 @@ const Recorder = () => {
     };
   }
 
+  const releaseStreams = () => {
+    if (liveStream.current !== null) {
+      liveStream.current.getTracks().forEach((track) => track.stop());
+      liveStream.current = null;
+    }
+    if (helperVideoStream.current !== null) {
+      helperVideoStream.current.getTracks().forEach((track) => track.stop());
+      helperVideoStream.current = null;
+    }
+    if (helperAudioStream.current !== null) {
+      helperAudioStream.current.getTracks().forEach((track) => track.stop());
+      helperAudioStream.current = null;
+    }
+    // Close AudioContext to release system audio resources and free RAM.
+    if (aCtx.current !== null) {
+      aCtx.current.close().catch(() => {});
+      aCtx.current = null;
+    }
+    destination.current = null;
+    audioInputSource.current = null;
+    audioOutputSource.current = null;
+    audioInputGain.current = null;
+    audioOutputGain.current = null;
+  };
+
   async function stopRecording() {
     isFinishing.current = true;
     if (recorder.current !== null) {
       recorder.current.stop();
       recorder.current = null;
     }
-
-    if (liveStream.current !== null) {
-      liveStream.current.getTracks().forEach(function (track) {
-        track.stop();
-      });
-      liveStream.current = null;
-    }
-
-    if (helperVideoStream.current !== null) {
-      helperVideoStream.current.getTracks().forEach(function (track) {
-        track.stop();
-      });
-      helperVideoStream.current = null;
-    }
-
-    if (helperAudioStream.current !== null) {
-      helperAudioStream.current.getTracks().forEach(function (track) {
-        track.stop();
-      });
-      helperAudioStream.current = null;
-    }
+    releaseStreams();
   }
 
   const dismissRecording = async () => {
@@ -312,6 +318,7 @@ const Recorder = () => {
       recorder.current.stop();
       recorder.current = null;
     }
+    releaseStreams();
     window.close();
   };
 
@@ -325,8 +332,8 @@ const Recorder = () => {
   };
 
   async function startAudioStream(id) {
+    // Note: mimeType is a MediaRecorder option, not a getUserMedia constraint.
     const audioStreamOptions = {
-      mimeType: "video/webm;codecs=vp8,opus",
       audio: {
         deviceId: {
           exact: id,
@@ -339,21 +346,12 @@ const Recorder = () => {
       .then((stream) => {
         return stream;
       })
-      .catch((err) => {
-        // Try again without the device ID
-        const audioStreamOptions = {
-          mimeType: "video/webm;codecs=vp8,opus",
-          audio: true,
-        };
-
+      .catch(() => {
+        // Device ID not found or unavailable — fall back to default mic.
         return navigator.mediaDevices
-          .getUserMedia(audioStreamOptions)
-          .then((stream) => {
-            return stream;
-          })
-          .catch((err) => {
-            return null;
-          });
+          .getUserMedia({ audio: true })
+          .then((stream) => stream)
+          .catch(() => null);
       });
 
     return result;
@@ -665,7 +663,8 @@ const Recorder = () => {
         dismissRecording();
       }
     },
-    [recorder.current, tabPreferred.current]
+    // Refs are read at call-time, not captured in the closure — stable [] deps.
+    []
   );
 
   useEffect(() => {

@@ -1,0 +1,146 @@
+2026-02-27
+
+Changes made to improve reliability, permissions flow, performance, and package agility:
+
+1) Background/service worker fixes
+- Fixed alarm-stop fallback logic to avoid referencing an undefined tab variable.
+- Fixed restore-recording flow to remove the tab update listener and avoid unresolved promise/listener leaks.
+- Fixed new-chunk handler to correctly receive and use sendResponse.
+- Improved storage estimate response payload to include quota, usage, and available bytes.
+- Optimized chunk forwarding from Background -> Sandbox by sending Blob chunks directly instead of converting each chunk to Base64.
+- Improved batch retry flow so retries are awaited before finalizing processing.
+
+2) Recording stability and memory protection
+- Updated memory checks in recorder implementations (Recorder, RecorderOffscreen, Region Recorder) to use available space (quota - usage), not raw quota.
+- Fixed FPS handling bug in offscreen recorder (isNaN check against parsed FPS value).
+- Fixed offscreen tab-capture constraints to use parsed FPS value.
+- Updated display-media capture to respect configured FPS value.
+
+3) Permissions flow hardening
+- Improved permissions page behavior to request device access when permission state is prompt (not denied), so users can grant required access during setup.
+- Replaced undefined error reference in denied-permission path with an explicit error code.
+- Hardened iframe message handlers to accept only parent-originated events.
+- Added robust handling for missing/failed response in capture-permission check from content script to background.
+
+4) Messaging/listener cleanup
+- Fixed runtime message listener cleanup in Download page by removing the exact listener function reference.
+- Added compatibility for both "recover-indexed-db" and "download-indexed-db" message types.
+- Fixed Region page postMessage listener add/remove mismatch to prevent leaked listeners.
+
+5) Content/sandbox correctness
+- Fixed content state reference usage in recording-check path (using contentStateRef.current).
+- Fixed duplicate shortcut key in default content state by using dismissRecordingShortcut for the second shortcut.
+- Updated sandbox chunk ingestion to support Blob chunk payloads and fallback single-chunk messages.
+
+6) Manifest/build/package agility improvements
+- Removed duplicate playground.html entry in web_accessible_resources.
+- Reduced copied asset footprint in build output by excluding unnecessary files from asset copy:
+  - *.map
+  - README.md
+  - package.json
+  - index.d.ts
+
+2026-02-27 (Follow-up fixes)
+
+Additional fixes implemented after review of user-reported issues:
+
+1) Permission + device detection reliability (profile/browser-specific scenarios)
+- Improved permissions flow to avoid false "no permission/mic not found" states when getUserMedia fails for transient reasons.
+- Added fallback device enumeration path when getUserMedia fails, and return best-available camera/microphone state instead of forcing hard failure.
+- Standardized permission payload handling by including explicit permission booleans and error metadata in postMessage payloads.
+- Added backward-compatible storage of both camelCase and lowercase device keys:
+  - audioInput + audioinput
+  - videoInput + videoinput
+
+2) Content state robustness
+- Updated Content state restore logic to read both key variants from storage for audio/video device lists.
+- Updated permission error handling to only force permission-denied UI for true denial errors (permissions-denied / NotAllowedError), not all failures.
+- Added automatic default-device recovery when saved mic/camera IDs are stale (common with browser profile/device changes), preventing persistent "mic/camera not found" states.
+
+3) UI correctness
+- Fixed microphone tooltip state typo (`micactive` -> `micActive`) that could produce incorrect mic status hints.
+
+4) Bundle agility tweak
+- Disabled SASS source maps outside development mode to reduce production build size.
+
+2026-02-27 (Security, RAM, performance & bug-fix pass)
+
+Comprehensive review and fix pass addressing security vulnerabilities, memory/RAM
+issues reported by users, performance regressions, and functional bugs.
+
+1) Security
+- Removed bare "*" wildcard from web_accessible_resources in manifest.json.
+  All required resources were already listed individually; the wildcard was
+  exposing every internal extension file to any web page.
+- Fixed window.addEventListener("message") in Sandbox ContentState to validate
+  event.source before processing, preventing arbitrary pages from injecting
+  messages that could trigger downloads or ffmpeg operations.
+- Fixed removeEventListener in Sandbox ContentState: previously passed a new
+  anonymous function that never matched the registered handler, so the message
+  listener was never cleaned up (permanent memory leak on every mount).
+
+2) RAM / memory leak fixes
+- Fixed chrome.downloads.onChanged listener accumulation in Sandbox ContentState:
+  each call to requestDownload previously added a persistent listener that was
+  never removed, causing all previous handlers to fire on every future download
+  event. Now uses a self-removing listener per download.
+- Fixed AudioContext never being closed after recording stops in all three
+  recorder implementations (Recorder, RecorderOffscreen, Region Recorder).
+  AudioContext holds OS-level audio resources; not closing it caused system RAM
+  to grow with every recording session. A releaseStreams() helper now closes
+  the AudioContext and nulls all audio graph refs on stop/dismiss.
+- Capped edit history depth at 20 entries in Sandbox ContentState. The undo
+  history previously grew without bound during long editing sessions, as each
+  entry holds a full copy of the large video state object.
+- Fixed window.onbeforeunload = function() { return true } deprecated pattern
+  in Sandbox ContentState: replaced with a properly registered/removed
+  beforeunload event listener that uses e.preventDefault() / e.returnValue.
+
+3) Recording correctness bugs
+- Fixed hasChunks.current reset from 0 (numeric) to false (boolean) in all
+  three recorder files. The ref is initialized as useRef(false) and compared
+  with === false; resetting to 0 caused the first-chunk tracking logic to skip
+  on recording restarts, risking silent chunk drops.
+- Fixed RecorderOffscreen incorrectly sending memoryError: true when
+  recorder.current.state === "inactive" is detected during data handling.
+  An inactive recorder on an empty data event means recording ended normally,
+  not a memory error. This was causing the memory-limit error modal to appear
+  after normal recordings.
+- Fixed window.close() in RecorderOffscreen.dismissRecording: offscreen
+  documents cannot close themselves via window.close(). Now sends a
+  "discard-offscreen" message to the background which calls
+  chrome.offscreen.closeDocument(). Added corresponding handler in Background.
+
+4) Background/service worker improvements
+- Batched sequential chrome.storage.local.get calls into single round-trips in
+  onActivated, handleAlarm, and chrome.tabs.onUpdated listeners, reducing
+  storage API round-trips from 5-8 down to 1 per event.
+- Replaced chrome.runtime.reload() in sendChunks error handler with a graceful
+  recovery path: on IndexedDB read failure, signals the sandbox to attempt
+  restore-recording instead of reloading the entire extension (which lost all
+  in-progress state and was disruptive to users).
+- Removed ~40 lines of unreachable dead code in offscreenDocument() for the
+  region recording path. The block was preceded by throw new Error("Exit
+  offscreen recording") and could never execute; the active fallback path
+  (recorder.html tab) is now used directly.
+- Removed deprecated tabs.selected property from chrome.tabs.update call in
+  resetActiveTab; highlighted (already present) is its replacement.
+
+5) Code quality / stability
+- Fixed useCallback dependency arrays in onMessage callbacks across all three
+  recorder files: ref .current values were listed as deps but refs are mutable
+  and do not trigger re-renders, making the dep listing misleading and
+  potentially masking stale closures. Changed to stable [] deps since the
+  callbacks correctly read .current at invocation time.
+- Removed invalid mimeType option from getUserMedia constraints in
+  startAudioStream across all three recorder files. mimeType is a MediaRecorder
+  option, not a getUserMedia constraint; browsers silently ignore it but the
+  code was technically incorrect.
+- Fixed beforeunload event listener in Region Recorder never being cleaned up:
+  was added with no corresponding removeEventListener in the useEffect cleanup,
+  causing listener accumulation if the iframe reloaded. Now uses a named handler
+  with proper cleanup.
+- Fixed handleBatch catch block in Sandbox ContentState not calling sendResponse
+  on error. The background retry loop awaits a response; silent failure caused
+  it to exhaust all retries before giving up, adding unnecessary latency to
+  failed chunk deliveries.

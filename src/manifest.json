@@ -40,10 +40,8 @@
         "permissions.html",
         "region.html",
         "waveform.html",
-        "playground.html",
         "editorfallback.html",
-        "download.html",
-        "*"
+        "download.html"
       ],
       "matches": ["<all_urls>"]
     }

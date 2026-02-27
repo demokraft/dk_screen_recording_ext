@@ -62,7 +62,7 @@ const RecorderOffscreen = () => {
     chunksStore.clear();
 
     lastTimecode.current = 0;
-    hasChunks.current = 0;
+    hasChunks.current = false;
 
     try {
       const qualityValue = quality.current;
@@ -162,8 +162,9 @@ const RecorderOffscreen = () => {
       try {
         navigator.storage.estimate().then((data) => {
           const minMemory = 26214400;
+          const available = (data?.quota || 0) - (data?.usage || 0);
           // Check if there's enough space to keep recording
-          if (data.quota < minMemory) {
+          if (available < minMemory) {
             chrome.runtime.sendMessage({
               type: "stop-recording-tab",
               memoryError: true,
@@ -215,11 +216,12 @@ const RecorderOffscreen = () => {
           });
         }
       } else {
-        // Check MediaRecorder state
-        if (recorder.current.state === "inactive") {
+        // Empty chunk with inactive recorder means recording ended normally.
+        // Do NOT set memoryError here — that flag is reserved for actual
+        // storage-full conditions detected in checkMaxMemory.
+        if (recorder.current && recorder.current.state === "inactive") {
           chrome.runtime.sendMessage({
             type: "stop-recording-tab",
-            memoryError: true,
           });
         }
       }
@@ -243,33 +245,38 @@ const RecorderOffscreen = () => {
     };
   }
 
+  const releaseStreams = () => {
+    if (liveStream.current !== null) {
+      liveStream.current.getTracks().forEach((track) => track.stop());
+      liveStream.current = null;
+    }
+    if (helperVideoStream.current !== null) {
+      helperVideoStream.current.getTracks().forEach((track) => track.stop());
+      helperVideoStream.current = null;
+    }
+    if (helperAudioStream.current !== null) {
+      helperAudioStream.current.getTracks().forEach((track) => track.stop());
+      helperAudioStream.current = null;
+    }
+    // Close AudioContext to release system audio resources and free RAM.
+    if (aCtx.current !== null) {
+      aCtx.current.close().catch(() => {});
+      aCtx.current = null;
+    }
+    destination.current = null;
+    audioInputSource.current = null;
+    audioOutputSource.current = null;
+    audioInputGain.current = null;
+    audioOutputGain.current = null;
+  };
+
   async function stopRecording() {
     isFinishing.current = true;
     if (recorder.current !== null) {
       recorder.current.stop();
       recorder.current = null;
     }
-
-    if (liveStream.current !== null) {
-      liveStream.current.getTracks().forEach(function (track) {
-        track.stop();
-      });
-      liveStream.current = null;
-    }
-
-    if (helperVideoStream.current !== null) {
-      helperVideoStream.current.getTracks().forEach(function (track) {
-        track.stop();
-      });
-      helperVideoStream.current = null;
-    }
-
-    if (helperAudioStream.current !== null) {
-      helperAudioStream.current.getTracks().forEach(function (track) {
-        track.stop();
-      });
-      helperAudioStream.current = null;
-    }
+    releaseStreams();
   }
 
   const dismissRecording = async () => {
@@ -278,7 +285,10 @@ const RecorderOffscreen = () => {
       recorder.current.stop();
       recorder.current = null;
     }
-    window.close();
+    releaseStreams();
+    // Offscreen documents cannot close themselves via window.close().
+    // Signal the background to call chrome.offscreen.closeDocument().
+    chrome.runtime.sendMessage({ type: "discard-offscreen" });
   };
 
   const restartRecording = async () => {
@@ -291,35 +301,15 @@ const RecorderOffscreen = () => {
   };
 
   async function startAudioStream(id) {
-    const audioStreamOptions = {
-      mimeType: "video/webm;codecs=vp8,opus",
-      audio: {
-        deviceId: {
-          exact: id,
-        },
-      },
-    };
-
     const result = await navigator.mediaDevices
-      .getUserMedia(audioStreamOptions)
-      .then((stream) => {
-        return stream;
-      })
-      .catch((err) => {
-        // Try again without the device ID
-        const audioStreamOptions = {
-          mimeType: "video/webm;codecs=vp8,opus",
-          audio: true,
-        };
-
+      .getUserMedia({ audio: { deviceId: { exact: id } } })
+      .then((stream) => stream)
+      .catch(() => {
+        // Device ID not found or unavailable — fall back to default mic.
         return navigator.mediaDevices
-          .getUserMedia(audioStreamOptions)
-          .then((stream) => {
-            return stream;
-          })
-          .catch((err) => {
-            return null;
-          });
+          .getUserMedia({ audio: true })
+          .then((stream) => stream)
+          .catch(() => null);
       });
 
     return result;
@@ -365,7 +355,7 @@ const RecorderOffscreen = () => {
     let fpsVal = parseInt(fpsValue);
 
     // Check if fps is a number
-    if (isNaN(fps)) {
+    if (isNaN(fpsVal)) {
       fpsVal = 30;
     }
     // Check user permissions for camera and microphone individually
@@ -437,7 +427,7 @@ const RecorderOffscreen = () => {
                 chromeMediaSourceId: tabID.current,
                 maxWidth: width,
                 maxHeight: height,
-                minFrameRate: fps,
+                minFrameRate: fpsVal,
               },
             },
           });
@@ -455,7 +445,7 @@ const RecorderOffscreen = () => {
           stream = await navigator.mediaDevices.getDisplayMedia({
             audio: data.systemAudio,
             video: {
-              frameRate: 30,
+              frameRate: fpsVal,
               displaySurface: "monitor",
             },
             selfBrowserSurface: "exclude",
@@ -584,7 +574,8 @@ const RecorderOffscreen = () => {
         dismissRecording();
       }
     },
-    [recorder.current]
+    // Refs are read at call-time — stable [] deps.
+    []
   );
 
   useEffect(() => {

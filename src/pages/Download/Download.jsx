@@ -55,7 +55,10 @@ const Download = () => {
           // Close this tab
           window.close();
         });
-    } else if (message.type === "recover-indexed-db") {
+    } else if (
+      message.type === "recover-indexed-db" ||
+      message.type === "download-indexed-db"
+    ) {
       // Rewrite in localforage
       const chunkArray = [];
       chunksStore
@@ -81,17 +84,14 @@ const Download = () => {
   });
 
   useEffect(() => {
+    const onRuntimeMessage = (message, sender, sendResponse) => {
+      handleMessage(message, sender, sendResponse);
+    };
     // chrome on message
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      handleMessage(message);
-    });
+    chrome.runtime.onMessage.addListener(onRuntimeMessage);
 
     return () => {
-      chrome.runtime.onMessage.removeListener(
-        (message, sender, sendResponse) => {
-          handleMessage(message);
-        }
-      );
+      chrome.runtime.onMessage.removeListener(onRuntimeMessage);
     };
   }, []);
 
