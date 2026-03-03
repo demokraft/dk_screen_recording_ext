@@ -45,6 +45,7 @@ const Recorder = () => {
   const isTab = useRef(false);
   const tabID = useRef(null);
   const tabPreferred = useRef(false);
+  const tabAudioCtx = useRef(null);
 
   const backupRef = useRef(false);
 
@@ -163,15 +164,25 @@ const Recorder = () => {
       return;
     }
 
+    let onstopTimer = null;
     recorder.current.onstop = (e) => {
       if (isRestarting.current) return;
-      setTimeout(() => {
+      onstopTimer = setTimeout(() => {
         if (!sentLast.current) {
           chrome.runtime.sendMessage({ type: "video-ready" });
           isFinishing.current = false;
         }
+        onstopTimer = null;
       }, 3000);
       isRestarting.current = false;
+    };
+
+    // Store timer ref for cleanup
+    recorder.current._onstopTimer = () => {
+      if (onstopTimer !== null) {
+        clearTimeout(onstopTimer);
+        onstopTimer = null;
+      }
     };
 
     const checkMaxMemory = () => {
@@ -237,8 +248,8 @@ const Recorder = () => {
           chrome.runtime.sendMessage({ type: "stop-recording-tab" });
         }
       } else {
-        // Check Media Recorder state
-        if (recorder.current.state === "inactive") {
+        // Check Media Recorder state — inactive means the recorder stopped itself
+        if (recorder.current && recorder.current.state === "inactive") {
           chrome.storage.local.set({
             recording: false,
             restarting: false,
@@ -258,7 +269,8 @@ const Recorder = () => {
       await handleDataAvailable(e);
     };
 
-    liveStream.current.getVideoTracks()[0].onended = () => {
+    const handleStreamEnded = () => {
+      if (isFinishing.current) return;
       chrome.storage.local.set({
         recording: false,
         restarting: false,
@@ -267,14 +279,8 @@ const Recorder = () => {
       chrome.runtime.sendMessage({ type: "stop-recording-tab" });
     };
 
-    helperVideoStream.current.getVideoTracks()[0].onended = () => {
-      chrome.storage.local.set({
-        recording: false,
-        restarting: false,
-        tabRecordedID: null,
-      });
-      chrome.runtime.sendMessage({ type: "stop-recording-tab" });
-    };
+    liveStream.current.getVideoTracks()[0].onended = handleStreamEnded;
+    helperVideoStream.current.getVideoTracks()[0].onended = handleStreamEnded;
   }
 
 function downloadCoordinatesFile(coordinates, fileName = "clicks.json") {
@@ -330,18 +336,21 @@ function downloadCoordinatesFile(coordinates, fileName = "clicks.json") {
       helperAudioStream.current = null;
     }
 
-      chrome.storage.local.get(["clickCoordinates"], (result) => {
-        const clicksData = result.clickCoordinates || [];
+    if (aCtx.current !== null) {
+      aCtx.current.close();
+      aCtx.current = null;
+    }
 
-        const jsonString = JSON.stringify(clicksData);
-      const base64Encoded = btoa(jsonString);
-        // downloadCoordinatesFile(base64Encoded, "fabric_clicks.json");
-      });
+    if (tabAudioCtx.current !== null) {
+      tabAudioCtx.current.close();
+      tabAudioCtx.current = null;
+    }
   }
 
   const dismissRecording = async () => {
     isRestarting.current = true;
     if (recorder.current !== null) {
+      if (recorder.current._onstopTimer) recorder.current._onstopTimer();
       recorder.current.stop();
       recorder.current = null;
     }
@@ -529,9 +538,9 @@ function downloadCoordinatesFile(coordinates, fileName = "clicks.json") {
 
       if (isTab.current) {
         // Continue to play the captured audio to the user.
-        const output = new AudioContext();
-        const source = output.createMediaStreamSource(stream);
-        source.connect(output.destination);
+        tabAudioCtx.current = new AudioContext();
+        const source = tabAudioCtx.current.createMediaStreamSource(stream);
+        source.connect(tabAudioCtx.current.destination);
       }
 
       helperVideoStream.current = stream;

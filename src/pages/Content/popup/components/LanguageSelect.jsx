@@ -5,7 +5,6 @@ export default function LanguageDropdown({ value, handleChange }) {
   
   // Update local state when prop changes
   useEffect(() => {
-    console.log('Prop value changed to:', value);
     setCurrentValue(value);
     
     // Verify the value is in our language list
@@ -16,8 +15,6 @@ export default function LanguageDropdown({ value, handleChange }) {
   }, [value]);
   
  const handleLanguageSelect = async (lang) => {
-  console.log("1. Language selected:", lang);
-
   setCurrentValue(lang);
   setOpenLang(false);
 
@@ -40,7 +37,6 @@ export default function LanguageDropdown({ value, handleChange }) {
             console.error("Storage error:", chrome.runtime.lastError);
             reject(chrome.runtime.lastError);
           } else {
-            console.log("5. Successfully saved:", updatedSeller);
             resolve();
           }
         });

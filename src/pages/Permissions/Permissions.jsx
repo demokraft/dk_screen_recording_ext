@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect } from "react";
 
 const Recorder = () => {
   useEffect(() => {
@@ -6,7 +6,7 @@ const Recorder = () => {
       {
         type: "screenity-permissions-loaded",
       },
-      "*"
+      chrome.runtime.getURL("/").slice(0, -1)
     );
   }, []);
 
@@ -37,19 +37,28 @@ const Recorder = () => {
           cameraPermission.state === "granted",
           microphonePermission.state === "granted"
         );
-      } else {
-        // Post message to parent window
+      } else if (
+        cameraPermission.state === "denied" &&
+        microphonePermission.state === "denied"
+      ) {
+        // Both explicitly denied — report failure without triggering getUserMedia
         window.parent.postMessage(
           {
             type: "screenity-permissions",
             success: false,
-            error: err.name,
+            error: "NotAllowedError",
           },
-          "*"
+          chrome.runtime.getURL("/").slice(0, -1)
         );
-        // sendResponse({ success: false, error: err.name });
+      } else {
+        // State is "prompt" for at least one — attempt to request access
+        enumerateDevices(
+          cameraPermission.state !== "denied",
+          microphonePermission.state !== "denied"
+        );
       }
     } catch (err) {
+      // permissions API unavailable (e.g. some Chrome profile policies) — try anyway
       enumerateDevices();
     }
   };
@@ -117,7 +126,7 @@ const Recorder = () => {
           cameraPermission: camGranted,
           microphonePermission: micGranted,
         },
-        "*"
+        chrome.runtime.getURL("/").slice(0, -1)
       );
 
       //sendResponse({ success: true, audioinput, audiooutput, videoinput });
@@ -134,7 +143,7 @@ const Recorder = () => {
           success: false,
           error: err.name,
         },
-        "*"
+        chrome.runtime.getURL("/").slice(0, -1)
       );
       //sendResponse({ success: false, error: err.name });
     }
@@ -148,9 +157,13 @@ const Recorder = () => {
 
   // Post message listener
   useEffect(() => {
-    window.addEventListener("message", (event) => {
+    const handler = (event) => {
       onMessage(event.data);
-    });
+    };
+    window.addEventListener("message", handler);
+    return () => {
+      window.removeEventListener("message", handler);
+    };
   }, []);
 
   return <div></div>;

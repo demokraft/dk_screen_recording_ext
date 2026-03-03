@@ -10,8 +10,6 @@ const VideoPlayer = (props) => {
   const [source, setSource] = useState(null);
   const [isSet, setIsSet] = useState(false);
 
-  console.log("kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk")
-
   useEffect(() => {
     if (
       playerRef.current &&

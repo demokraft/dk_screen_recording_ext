@@ -145,17 +145,23 @@ const RecorderOffscreen = () => {
       return;
     }
 
-    recorder.current.onstop = async (e) => {
+    let onstopTimer = null;
+    recorder.current.onstop = (e) => {
       if (isRestarting.current) return;
-
-      setTimeout(() => {
+      onstopTimer = setTimeout(() => {
         if (!sentLast.current) {
           chrome.runtime.sendMessage({ type: "video-ready" });
           isFinishing.current = false;
         }
+        onstopTimer = null;
       }, 3000);
-
       isRestarting.current = false;
+    };
+    recorder.current._onstopTimer = () => {
+      if (onstopTimer !== null) {
+        clearTimeout(onstopTimer);
+        onstopTimer = null;
+      }
     };
 
     const checkMaxMemory = () => {
@@ -215,11 +221,10 @@ const RecorderOffscreen = () => {
           });
         }
       } else {
-        // Check MediaRecorder state
-        if (recorder.current.state === "inactive") {
+        // Check MediaRecorder state — inactive means the recorder stopped itself (not a memory error)
+        if (recorder.current && recorder.current.state === "inactive") {
           chrome.runtime.sendMessage({
             type: "stop-recording-tab",
-            memoryError: true,
           });
         }
       }
@@ -234,13 +239,13 @@ const RecorderOffscreen = () => {
       await handleDataAvailable(e);
     };
 
-    liveStream.current.getVideoTracks()[0].onended = () => {
+    const handleStreamEnded = () => {
+      if (isFinishing.current) return;
       chrome.runtime.sendMessage({ type: "stop-recording-tab" });
     };
 
-    helperVideoStream.current.getVideoTracks()[0].onended = () => {
-      chrome.runtime.sendMessage({ type: "stop-recording-tab" });
-    };
+    liveStream.current.getVideoTracks()[0].onended = handleStreamEnded;
+    helperVideoStream.current.getVideoTracks()[0].onended = handleStreamEnded;
   }
 
   async function stopRecording() {
@@ -270,11 +275,17 @@ const RecorderOffscreen = () => {
       });
       helperAudioStream.current = null;
     }
+
+    if (aCtx.current !== null) {
+      aCtx.current.close();
+      aCtx.current = null;
+    }
   }
 
   const dismissRecording = async () => {
     isRestarting.current = true;
     if (recorder.current !== null) {
+      if (recorder.current._onstopTimer) recorder.current._onstopTimer();
       recorder.current.stop();
       recorder.current = null;
     }
@@ -455,7 +466,9 @@ const RecorderOffscreen = () => {
           stream = await navigator.mediaDevices.getDisplayMedia({
             audio: data.systemAudio,
             video: {
-              frameRate: 30,
+              width: { ideal: width },
+              height: { ideal: height },
+              frameRate: { ideal: fpsVal, max: fpsVal },
               displaySurface: "monitor",
             },
             selfBrowserSurface: "exclude",
@@ -530,6 +543,23 @@ const RecorderOffscreen = () => {
       setStarted(true);
       chrome.runtime.sendMessage({ type: "reset-active-tab" });
     } catch (err) {
+      // Clean up any streams that were opened before the error
+      if (helperVideoStream.current !== null) {
+        helperVideoStream.current.getTracks().forEach((t) => t.stop());
+        helperVideoStream.current = null;
+      }
+      if (helperAudioStream.current !== null) {
+        helperAudioStream.current.getTracks().forEach((t) => t.stop());
+        helperAudioStream.current = null;
+      }
+      if (liveStream.current !== null) {
+        liveStream.current.getTracks().forEach((t) => t.stop());
+        liveStream.current = null;
+      }
+      if (aCtx.current !== null) {
+        aCtx.current.close();
+        aCtx.current = null;
+      }
       chrome.runtime.sendMessage({
         type: "recording-error",
         error: "cancel-modal",

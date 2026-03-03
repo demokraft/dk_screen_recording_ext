@@ -26,7 +26,6 @@ if (!window.hasClickListener) {
 
     chrome.storage.local.get(["qualityValue", "savedTime"], (res) => {
       if (!res.savedTime) {
-        console.log("No saved time");
         return;
       }
 
@@ -96,14 +95,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // content.js
 
+const ALLOWED_ORIGINS = [
+  "https://app.demokraft.ai",
+  "https://devapp.demokraft.ai",
+  "https://betaapp.demokraft.ai",
+  "http://localhost:3000",
+];
+
 // Listen for messages from web app
 window.addEventListener("message", (event) => {
   if (event.source !== window) return;
 
-  // ✅ Handle saving token
-  if (event.data.type === "SET_TOKEN") {
-    console.log("📩 Got token from web app:", event.data);
+  // Only process messages from known demokraft origins
+  if (!ALLOWED_ORIGINS.includes(event.origin)) return;
 
+  // Handle saving token
+  if (event.data.type === "SET_TOKEN") {
     chrome.storage.local.set(
       {
         SELLER_DETAILS: {
@@ -113,37 +120,28 @@ window.addEventListener("message", (event) => {
         },
       },
       () => {
-        console.log("✅ Token saved in chrome.storage.local");
-
-        // Send confirmation back
+        // Reply only to the sender's specific origin
         window.postMessage(
           {
             type: "SET_TOKEN_RESPONSE",
             status: "SUCCESS",
-            data: {
-              ACCESS_TOKEN: event.data.token,
-              COMPANY_ID: event.data.companyId,
-              SELLER_ID: event.data.sellerId,
-            },
           },
-          "*"
+          event.origin
         );
       }
     );
   }
 
-  // ❌ Handle clearing token
+  // Handle clearing token
   if (event.data.type === "CLEAR_TOKEN") {
     chrome.storage.local.remove("SELLER_DETAILS", () => {
-      console.log("🗑️ Token cleared from chrome.storage.local");
-
-      // Send confirmation back
+      // Reply only to the sender's specific origin
       window.postMessage(
         {
           type: "CLEAR_TOKEN_RESPONSE",
           status: "SUCCESS",
         },
-        "*"
+        event.origin
       );
     });
   }

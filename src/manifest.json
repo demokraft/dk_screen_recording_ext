@@ -13,10 +13,10 @@
   "icons": {
     "128": "assets/img/icon-128.png"
   },
-  "host_permissions": ["<all_urls>","http://localhost:3000/*","https://devapp.demokraft.ai/*","https://app.demokraft.ai/*","https://betaapp.demokraft.ai/*"],
+  "host_permissions": ["<all_urls>"],
   "content_scripts": [
     {
-      "matches": ["<all_urls>","http://localhost:3000/*","https://devapp.demokraft.ai/*","https://app.demokraft.ai/*","https://betaapp.demokraft.ai/*"],
+      "matches": ["<all_urls>"],
       "js": ["contentScript.bundle.js"],
       "css": ["assets/fonts/fonts.css"]
     }
@@ -40,10 +40,8 @@
         "permissions.html",
         "region.html",
         "waveform.html",
-        "playground.html",
         "editorfallback.html",
-        "download.html",
-        "*"
+        "download.html"
       ],
       "matches": ["<all_urls>"]
     }

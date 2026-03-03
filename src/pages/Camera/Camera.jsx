@@ -15,9 +15,22 @@ const Camera = () => {
   // Offscreen canvas for getting video frame
   const offScreenCanvasRef = useRef(null);
   const offScreenCanvasContextRef = useRef(null);
+  const rafIdRef = useRef(null);
+  const switchTimerRef = useRef(null);
 
   useEffect(() => {
     offScreenCanvasRef.current = document.createElement("canvas");
+    return () => {
+      // Cancel any running RAF loop on unmount
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      if (switchTimerRef.current !== null) {
+        clearTimeout(switchTimerRef.current);
+        switchTimerRef.current = null;
+      }
+    };
   }, []);
 
   const getCameraStream = (constraints) => {
@@ -43,7 +56,7 @@ const Camera = () => {
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
           offScreenCanvasContextRef.current = canvas.getContext("2d");
-          requestAnimationFrame(captureFrame);
+          rafIdRef.current = requestAnimationFrame(captureFrame);
         };
       })
       .catch((err) => {
@@ -84,27 +97,23 @@ const Camera = () => {
         )
       );
     }
-    requestAnimationFrame(captureFrame);
+    // Store the RAF ID so we can cancel on unmount
+    rafIdRef.current = requestAnimationFrame(captureFrame);
   };
 
   useEffect(() => {
-    chrome.runtime.onMessage.addListener(function (
-      request,
-      sender,
-      sendResponse
-    ) {
+    const onMessage = (request, sender, sendResponse) => {
       if (request.type === "switch-camera") {
         if (request.id !== "none") {
           stopCameraStream();
-          setTimeout(() => {
-            getCameraStream({
-              video: {
-                deviceId: {
-                  exact: request.id,
-                },
-              },
-            });
-          }, 2000);
+          // Clear any pending switch before scheduling a new one
+          if (switchTimerRef.current !== null) {
+            clearTimeout(switchTimerRef.current);
+          }
+          switchTimerRef.current = setTimeout(() => {
+            switchTimerRef.current = null;
+            getCameraStream({ video: { deviceId: { exact: request.id } } });
+          }, 200);
         }
       } else if (request.type === "background-effects-active") {
         setBackgroundEffects(true);
@@ -115,11 +124,9 @@ const Camera = () => {
         setHeight("100%");
         recordingTypeRef.current = "camera";
       } else if (request.type === "screen-update") {
-        // Needs to fit 100% width and height but considering aspect ratio
         const video = videoRef.current;
         const videoWidth = video.videoWidth;
         const videoHeight = video.videoHeight;
-
         if (videoWidth > videoHeight) {
           setWidth("auto");
           setHeight("100%");
@@ -127,21 +134,17 @@ const Camera = () => {
           setWidth("100%");
           setHeight("auto");
         }
-
         recordingTypeRef.current = "screen";
       } else if (request.type === "toggle-pip") {
-        // If picture in picture is active, close it, otherwise open it
         if (document.pictureInPictureElement) {
           document.exitPictureInPicture();
         } else {
           try {
             videoRef.current.requestPictureInPicture().catch(() => {
-              // Cancel pip mode if it fails
               setPipMode(false);
               chrome.runtime.sendMessage({ type: "pip-ended" });
             });
           } catch (error) {
-            // Cancel pip mode if it fails
             setPipMode(false);
             chrome.runtime.sendMessage({ type: "pip-ended" });
           }
@@ -150,12 +153,10 @@ const Camera = () => {
         if (request.surface === "monitor") {
           try {
             videoRef.current.requestPictureInPicture().catch(() => {
-              // Cancel pip mode if it fails
               setPipMode(false);
               chrome.runtime.sendMessage({ type: "pip-ended" });
             });
           } catch (error) {
-            // Cancel pip mode if it fails
             setPipMode(false);
             chrome.runtime.sendMessage({ type: "pip-ended" });
           }
@@ -163,19 +164,22 @@ const Camera = () => {
       } else if (request.type === "camera-toggled-toolbar") {
         if (request.active) {
           stopCameraStream();
-          setTimeout(() => {
-            getCameraStream({
-              video: {
-                deviceId: {
-                  exact: request.id,
-                },
-              },
-            });
-          }, 2000);
+          if (switchTimerRef.current !== null) {
+            clearTimeout(switchTimerRef.current);
+          }
+          switchTimerRef.current = setTimeout(() => {
+            switchTimerRef.current = null;
+            getCameraStream({ video: { deviceId: { exact: request.id } } });
+          }, 200);
           setPipMode(false);
         }
       }
-    });
+    };
+
+    chrome.runtime.onMessage.addListener(onMessage);
+    return () => {
+      chrome.runtime.onMessage.removeListener(onMessage);
+    };
   }, []);
 
   // Check chrome local storage

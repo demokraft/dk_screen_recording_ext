@@ -36,22 +36,9 @@ const ContentState = (props) => {
   const startRecording = useCallback(() => {
     const savedTime = new Date().getTime(); // store timestamp instead of ISO
 
-    chrome.storage.local.remove("clickCoordinates", () => {
-      console.log("clickCoordinates cleared");
-    });
-      chrome.storage.local.remove("clicks", () => {
-            console.log("clicks cleared");
-          });
-
-   
-      chrome.storage.local.set({ savedTime }, () => {
-        console.log("Time saved!");
-
-        // Verify
-        chrome.storage.local.get("savedTime", (result) => {
-          console.log("Saved time is:", result.savedTime);
-        });
-      });
+    chrome.storage.local.remove("clickCoordinates");
+    chrome.storage.local.remove("clicks");
+    chrome.storage.local.set({ savedTime });
 
      
 
@@ -675,7 +662,6 @@ const ContentState = (props) => {
     cameraPermission: true,
     microphonePermission: true,
     askMicrophone: true,
-    recordingShortcut: "⌥⇧W",
     recordingShortcut: "⌥⇧D",
     cursorMode: null,
     shape: "rectangle",

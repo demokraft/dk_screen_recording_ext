@@ -189,8 +189,14 @@ const handleAlarm = async (alarm) => {
         if (t) {
           sendMessageTab(activeTab, { type: "stop-recording-tab" });
         } else {
-          sendMessageTab(tab.id, { type: "stop-recording-tab" });
-          chrome.storage.local.set({ activeTab: tab.id });
+          // activeTab is gone; fall back to the current alarm-triggering tab context
+          const { activeTab: fallback } = { activeTab };
+          chrome.tabs.query({ active: true, lastFocusedWindow: true }, ([current]) => {
+            if (current) {
+              sendMessageTab(current.id, { type: "stop-recording-tab" });
+              chrome.storage.local.set({ activeTab: current.id });
+            }
+          });
         }
       });
     }
@@ -355,8 +361,6 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
 chrome.runtime.onMessage.addListener((message, sender) => {
   if (message.type === "SAVE_CLICK") {
-    console.log(message.data, "clickData");
-
     chrome.storage.local.get("clickCoordinates", (result) => {
       const clickCoordinates = result.clickCoordinates || []; // Use the correct key
       clickCoordinates.push(message.data);
@@ -715,10 +719,7 @@ chrome.action.onClicked.addListener(async (tab) => {
           return;
         }
 
-        // ✅ Already have SELLER_DETAILS → continue with logic
-        console.log("COMPANY_ID found:", res.SELLER_DETAILS);
-
-        // Example: use it immediately
+        // Already have SELLER_DETAILS → continue with logic
         // doSomething(res.SELLER_DETAILS);
       });
 
@@ -1388,20 +1389,15 @@ const restoreRecording = async () => {
       url: editor_url,
       active: true,
     },
-    async (tab) => {
+    (tab) => {
       // Set URL as sandbox tab
       chrome.storage.local.set({ sandboxTab: tab.id });
-      // Wait for the tab to be loaded
-      await new Promise((resolve) => {
-        chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
-          if (info.status === "complete" && tabId === tab.id) {
-            sendMessageTab(tab.id, {
-              type: "restore-recording",
-            });
-
-            sendChunks();
-          }
-        });
+      chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
+        if (info.status === "complete" && tabId === tab.id) {
+          chrome.tabs.onUpdated.removeListener(listener);
+          sendMessageTab(tab.id, { type: "restore-recording" });
+          sendChunks();
+        }
       });
     }
   );

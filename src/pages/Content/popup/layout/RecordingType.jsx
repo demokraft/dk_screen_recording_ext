@@ -23,82 +23,43 @@ const RecordingType = (props) => {
      const [language, setLanguage] = useState("English");
 
      // Load saved language from Chrome storage on component mount
-   useEffect(() => {
-  console.log("1. Component mounted, loading language from SELLER_DETAILS...");
+  useEffect(() => {
+  const validLanguages = [
+    "Dutch", "English", "French", "German", "Hindi",
+    "Indonesian", "Italian", "Japanese", "Korean",
+    "Malay", "Portuguese", "Russian", "Spanish", "Turkish"
+  ];
 
-  // Load from Chrome storage
   chrome.storage.local.get(["SELLER_DETAILS"], (result) => {
-    console.log("2. Storage get result:", result);
-
     const seller = result.SELLER_DETAILS || {};
     const savedLang = seller.selectedLanguage;
 
-    const validLanguages = [
-      "Dutch", "English", "French", "German", "Hindi",
-      "Indonesian", "Italian", "Japanese", "Korean",
-      "Malay", "Portuguese", "Russian", "Spanish", "Turkish"
-    ];
-
-    if (savedLang) {
-      console.log("3. Found saved language:", savedLang);
-
-      if (validLanguages.includes(savedLang)) {
-        setLanguage(savedLang); // Valid → load it
-      } else {
-        console.warn("4. Invalid language found, defaulting to English");
-
-        setLanguage("English");
-
-        chrome.storage.local.set({
-          SELLER_DETAILS: {
-            ...seller,
-            selectedLanguage: "English"
-          }
-        });
-      }
-
+    if (savedLang && validLanguages.includes(savedLang)) {
+      setLanguage(savedLang);
     } else {
-      console.log("5. No saved language → Setting English");
-
       setLanguage("English");
-
       chrome.storage.local.set({
-        SELLER_DETAILS: {
-          ...seller,
-          selectedLanguage: "English"
-        }
+        SELLER_DETAILS: { ...seller, selectedLanguage: "English" }
       });
     }
   });
 
-  // Listen for storage changes (REAL-TIME sync)
   const handleStorageChange = (changes, areaName) => {
     if (areaName !== "local") return;
-
     if (changes.SELLER_DETAILS) {
-      const newDetails = changes.SELLER_DETAILS.newValue;
-      const newLanguage = newDetails?.selectedLanguage;
-
-      if (newLanguage) {
-        console.log("6. Storage changed → Updating language:", newLanguage);
-        setLanguage(newLanguage);
-      }
+      const newLanguage = changes.SELLER_DETAILS.newValue?.selectedLanguage;
+      if (newLanguage) setLanguage(newLanguage);
     }
   };
 
   chrome.storage.onChanged.addListener(handleStorageChange);
 
   return () => {
-    console.log("7. Cleaning up storage listener");
     chrome.storage.onChanged.removeListener(handleStorageChange);
   };
 }, []);
 
 
-     // Log when language changes
-     useEffect(() => {
-       console.log('Current language state:', language);
-     }, [language]);
 
     const [open, setOpen] = useState(false);
 
