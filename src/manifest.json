@@ -13,10 +13,10 @@
   "icons": {
     "128": "assets/img/icon-128.png"
   },
-  "host_permissions": ["<all_urls>"],
-  "content_scripts": [
+  "host_permissions": ["<all_urls>","http://localhost:3000/*","https://devapp.demokraft.ai/*","https://app.demokraft.ai/*","https://betaapp.demokraft.ai/*"],
+   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": ["<all_urls>","http://localhost:3000/*","https://devapp.demokraft.ai/*","https://app.demokraft.ai/*","https://betaapp.demokraft.ai/*"],
       "js": ["contentScript.bundle.js"],
       "css": ["assets/fonts/fonts.css"]
     }
