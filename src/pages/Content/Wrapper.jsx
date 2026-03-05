@@ -72,7 +72,7 @@ const Wrapper = () => {
       {
         type: "screenity-get-permissions",
       },
-      "*"
+      chrome.runtime.getURL("/").slice(0, -1)
     );
 
     setContentState((prevContentState) => ({

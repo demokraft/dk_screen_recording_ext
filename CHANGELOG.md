@@ -72,8 +72,12 @@ All notable changes to the Demokraft AI Screen Recording Extension are documente
     2. Incoming messages are now validated against `event.origin` before processing.
     3. Replies now use `event.origin` as the target origin instead of `"*"`.
 
-#### `src/pages/Permissions/Permissions.jsx` — postMessage Wildcard Origin
-- All `window.parent.postMessage({...}, "*")` calls (sending device permission status and device lists to the parent iframe) now use `chrome.runtime.getURL("/").slice(0, -1)` as the target origin, restricting the message to the extension's own origin only.
+#### `src/pages/Permissions/Permissions.jsx` and `src/pages/Content/Wrapper.jsx` — postMessage Origin Fix
+- **Regression fix**: The previous change in `Permissions.jsx` replaced `"*"` with `chrome.runtime.getURL("/").slice(0, -1)` as the `postMessage` target for messages sent from the `permissions.html` iframe to its parent. This was incorrect: the parent of the iframe is the **web page** the content script is running in (e.g. `https://example.com`), not an extension page. The browser silently dropped all messages where the target origin didn't match the parent's actual origin, causing `permissionsLoaded` to never become `true` and breaking the entire permissions flow — manifesting as repeated mic/camera permission prompts.
+  - **Fix**: The `permissions-loaded` notification (no sensitive data) now uses `"*"` as the target since the parent origin is not yet known at mount time.
+  - **Fix**: The message handler now captures `event.origin` from the incoming `screenity-get-permissions` message and stores it in a `parentOrigin` ref. All subsequent replies (`screenity-permissions` with device lists) use `parentOrigin.current` as the target, so the reply is scoped to the origin that triggered the check.
+  - **Fix**: Added `event.source !== window.parent` guard so only the direct parent frame can trigger permission checks — other windows on the page cannot send spoofed `screenity-get-permissions` messages to the hidden iframe.
+  - **Fix**: `Wrapper.jsx` now sends `screenity-get-permissions` to the iframe using `chrome.runtime.getURL("/").slice(0, -1)` as the target (extension origin), which is correct for parent → child iframe messaging since the iframe IS an extension page.
 
 #### `src/manifest.json` — Wildcard Web-Accessible Resource
 - The `web_accessible_resources` list included a trailing `"*"` entry which made **every file in the extension bundle** accessible to any website. Combined with `"matches": ["<all_urls>"]`, this allowed any page on the internet to load the extension's JS bundles, read their structure, or attempt to embed internal extension pages as iframes.
@@ -106,7 +110,8 @@ The following debug/diagnostic log statements were removed to reduce runtime ove
 
 | File | Change Type |
 |------|-------------|
-| `src/pages/Permissions/Permissions.jsx` | Bug fix, security, cleanup |
+| `src/pages/Permissions/Permissions.jsx` | Bug fix, security, cleanup, regression fix |
+| `src/pages/Content/Wrapper.jsx` | Bug fix, security |
 | `src/pages/Recorder/Recorder.jsx` | Bug fix, memory leak, reliability |
 | `src/pages/RecorderOffscreen/RecorderOffscreen.jsx` | Bug fix, memory leak, video quality, reliability |
 | `src/pages/Camera/Camera.jsx` | Memory leak, performance |

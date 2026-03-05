@@ -1,17 +1,21 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 
 const Recorder = () => {
+  // Capture the parent window's origin from the first screenity-get-permissions
+  // message so we can use it as the postMessage target for all replies.
+  // The parent is the web page the content script is running in (NOT an
+  // extension page), so chrome.runtime.getURL() is the wrong target origin.
+  const parentOrigin = useRef("*");
+
   useEffect(() => {
-    window.parent.postMessage(
-      {
-        type: "screenity-permissions-loaded",
-      },
-      chrome.runtime.getURL("/").slice(0, -1)
-    );
+    // Notify parent that the iframe is ready. We don't know the parent's origin
+    // yet, so use "*" here — this message carries no sensitive data.
+    window.parent.postMessage({ type: "screenity-permissions-loaded" }, "*");
   }, []);
 
   const checkPermissions = async () => {
-    // Individually check the camera and microphone permissions using the Permissions API. Then enumerate devices respectively.
+    // Individually check the camera and microphone permissions using the
+    // Permissions API, then enumerate devices accordingly.
     try {
       const cameraPermission = await navigator.permissions.query({
         name: "camera",
@@ -28,7 +32,7 @@ const Recorder = () => {
         checkPermissions();
       };
 
-      // If the permissions are granted, enumerate devices
+      // If at least one permission is already granted, enumerate what we can
       if (
         cameraPermission.state === "granted" ||
         microphonePermission.state === "granted"
@@ -48,17 +52,17 @@ const Recorder = () => {
             success: false,
             error: "NotAllowedError",
           },
-          chrome.runtime.getURL("/").slice(0, -1)
+          parentOrigin.current
         );
       } else {
-        // State is "prompt" for at least one — attempt to request access
+        // State is "prompt" for at least one — attempt to request access once
         enumerateDevices(
           cameraPermission.state !== "denied",
           microphonePermission.state !== "denied"
         );
       }
     } catch (err) {
-      // permissions API unavailable (e.g. some Chrome profile policies) — try anyway
+      // Permissions API unavailable (e.g. some Chrome profile policies) — try anyway
       enumerateDevices();
     }
   };
@@ -78,7 +82,6 @@ const Recorder = () => {
       let videoinput = [];
 
       if (micGranted) {
-        // Filter by audio input
         audioinput = devicesInfo
           .filter((device) => device.kind === "audioinput")
           .map((device) => ({
@@ -86,7 +89,6 @@ const Recorder = () => {
             label: device.label,
           }));
 
-        // Filter by audio output and extract relevant properties
         audiooutput = devicesInfo
           .filter((device) => device.kind === "audiooutput")
           .map((device) => ({
@@ -96,7 +98,6 @@ const Recorder = () => {
       }
 
       if (camGranted) {
-        // Filter by video input and extract relevant properties
         videoinput = devicesInfo
           .filter((device) => device.kind === "videoinput")
           .map((device) => ({
@@ -107,7 +108,6 @@ const Recorder = () => {
 
       // Save in Chrome local storage
       chrome.storage.local.set({
-        // Set available devices
         audioinput: audioinput,
         audiooutput: audiooutput,
         videoinput: videoinput,
@@ -115,7 +115,8 @@ const Recorder = () => {
         microphonePermission: micGranted,
       });
 
-      // Post message to parent window
+      // Reply to parent with device list. Use the captured parent origin so
+      // the browser validates the target and does not broadcast to other frames.
       window.parent.postMessage(
         {
           type: "screenity-permissions",
@@ -126,39 +127,32 @@ const Recorder = () => {
           cameraPermission: camGranted,
           microphonePermission: micGranted,
         },
-        chrome.runtime.getURL("/").slice(0, -1)
+        parentOrigin.current
       );
 
-      //sendResponse({ success: true, audioinput, audiooutput, videoinput });
-
-      // End the stream
-      stream.getTracks().forEach(function (track) {
-        track.stop();
-      });
+      stream.getTracks().forEach((track) => track.stop());
     } catch (err) {
-      // Post message to parent window
       window.parent.postMessage(
         {
           type: "screenity-permissions",
           success: false,
           error: err.name,
         },
-        chrome.runtime.getURL("/").slice(0, -1)
+        parentOrigin.current
       );
-      //sendResponse({ success: false, error: err.name });
-    }
-  };
-
-  const onMessage = (message) => {
-    if (message.type === "screenity-get-permissions") {
-      checkPermissions();
     }
   };
 
   // Post message listener
   useEffect(() => {
     const handler = (event) => {
-      onMessage(event.data);
+      // Only accept messages from the direct parent frame, not from other windows
+      if (event.source !== window.parent) return;
+      if (!event.data || event.data.type !== "screenity-get-permissions") return;
+
+      // Capture the parent's origin for use in all replies
+      parentOrigin.current = event.origin;
+      checkPermissions();
     };
     window.addEventListener("message", handler);
     return () => {
