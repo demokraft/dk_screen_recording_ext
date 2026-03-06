@@ -90,9 +90,18 @@ const Wrapper = () => {
       {contentState.showExtension && (
         <iframe
           style={{
-            // all: "unset",
-            display: "none",
-            visibility: "hidden",
+            // Positioned off-screen rather than display:none so that Chrome's
+            // Permissions Policy allows getUserMedia calls from this iframe.
+            // display:none / visibility:hidden causes Chrome (especially managed
+            // profiles) to block camera/mic access from the iframe entirely.
+            position: "fixed",
+            width: "1px",
+            height: "1px",
+            top: "-9999px",
+            left: "-9999px",
+            opacity: 0,
+            pointerEvents: "none",
+            border: "none",
           }}
           ref={permissionsRef}
           src={chrome.runtime.getURL("permissions.html")}
