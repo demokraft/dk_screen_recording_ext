@@ -375,8 +375,8 @@ const RecorderOffscreen = () => {
     const fpsValue = fps.current;
     let fpsVal = parseInt(fpsValue);
 
-    // Check if fps is a number
-    if (isNaN(fps)) {
+    // Check if fps is a number — fix: was isNaN(fps) which checked the useRef object (always false); must check the parsed integer
+    if (isNaN(fpsVal)) {
       fpsVal = 30;
     }
     // Check user permissions for camera and microphone individually
@@ -448,7 +448,7 @@ const RecorderOffscreen = () => {
                 chromeMediaSourceId: tabID.current,
                 maxWidth: width,
                 maxHeight: height,
-                minFrameRate: fps,
+                maxFrameRate: fpsVal, // Fix: was minFrameRate (allowed Chrome to exceed user's chosen FPS, producing larger files); use maxFrameRate to cap at the chosen setting
               },
             },
           });
