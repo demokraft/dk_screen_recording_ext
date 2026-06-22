@@ -15,12 +15,10 @@
     "noFallthroughCasesInSwitch": true,
     "module": "esnext",
     "moduleResolution": "node",
+    "ignoreDeprecations": "6.0",
     "resolveJsonModule": true,
     "noEmit": false,
     "checkJs": false,
-    "types": [
-      "node"
-    ],
     "jsx": "preserve",
     "incremental": true,
     "isolatedModules": true

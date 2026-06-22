@@ -49,12 +49,16 @@ const RecorderOffscreen = () => {
     // Check that a recording is not already in progress
     if (recorder.current !== null) return;
     navigator.storage.persist();
-    // Check if the stream actually has data in it
-    if (helperVideoStream.current.getVideoTracks().length === 0) {
+    // Check if the stream has a live video track.
+    // A track can exist in the array but be in 'ended' state (e.g. user clicked
+    // Chrome's "Stop sharing" bar between stream setup and recording start).
+    // MediaRecorder silently omits ended tracks, producing an audio-only WebM.
+    const videoTracks = helperVideoStream.current.getVideoTracks();
+    if (videoTracks.length === 0 || videoTracks[0].readyState === "ended") {
       chrome.runtime.sendMessage({
         type: "recording-error",
         error: "stream-error",
-        why: "No video tracks available",
+        why: "No live video track available — screen sharing may have been stopped before recording started",
       });
       return;
     }
