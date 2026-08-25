@@ -25,7 +25,7 @@ const RecordingType = (props) => {
      // Load saved language from Chrome storage on component mount
   useEffect(() => {
   const validLanguages = [
-    "Bulgarian", "Chinese", "Czech", "Danish", "Dutch", "English",
+    "Bengali", "Bulgarian", "Chinese", "Czech", "Danish", "Dutch", "English",
     "French", "German", "Greek", "Gujarati", "Hindi", "Indonesian",
     "Italian", "Japanese", "Kannada", "Korean", "Malay", "Marathi",
     "Norwegian", "Polish", "Portuguese", "Punjabi", "Romanian",
@@ -40,6 +40,12 @@ const RecordingType = (props) => {
     if (savedLang && validLanguages.includes(savedLang)) {
       setLanguage(savedLang);
     } else {
+      // Log so a silently-reset language choice (e.g. saved before a language was
+      // added to validLanguages, or a stale/typo'd value) is debuggable — this
+      // branch otherwise fails silent, resetting the seller's saved language.
+      if (savedLang) {
+        console.warn(`Saved language "${savedLang}" is not in validLanguages; resetting to English.`);
+      }
       setLanguage("English");
       chrome.storage.local.set({
         SELLER_DETAILS: { ...seller, selectedLanguage: "English" }

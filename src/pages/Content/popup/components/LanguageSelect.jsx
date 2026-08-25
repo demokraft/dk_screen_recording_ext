@@ -52,6 +52,7 @@ export default function LanguageDropdown({ value, handleChange }) {
   const dropdownUpIcon = "https://img.icons8.com/?size=60&id=101314&format=png"; // up arrow
 
   const languageFlagMap = {
+    Bengali: "https://flagcdn.com/in.svg",
     Bulgarian: "https://flagcdn.com/bg.svg",
     Chinese: "https://flagcdn.com/cn.svg",
     Czech: "https://flagcdn.com/cz.svg",
