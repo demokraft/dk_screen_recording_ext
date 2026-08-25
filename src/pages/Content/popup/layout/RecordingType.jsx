@@ -25,9 +25,12 @@ const RecordingType = (props) => {
      // Load saved language from Chrome storage on component mount
   useEffect(() => {
   const validLanguages = [
-    "Dutch", "English", "French", "German", "Hindi",
-    "Indonesian", "Italian", "Japanese", "Korean",
-    "Malay", "Portuguese", "Russian", "Spanish", "Turkish"
+    "Bulgarian", "Chinese", "Czech", "Danish", "Dutch", "English",
+    "French", "German", "Greek", "Gujarati", "Hindi", "Indonesian",
+    "Italian", "Japanese", "Kannada", "Korean", "Malay", "Marathi",
+    "Norwegian", "Polish", "Portuguese", "Punjabi", "Romanian",
+    "Russian", "Slovak", "Spanish", "Swedish", "Tamil", "Telugu",
+    "Thai", "Turkish", "Ukrainian", "Vietnamese"
   ];
 
   chrome.storage.local.get(["SELLER_DETAILS"], (result) => {
