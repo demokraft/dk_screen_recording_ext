@@ -26,7 +26,7 @@ const RecordingType = (props) => {
   useEffect(() => {
   const validLanguages = [
     "Bengali", "Bulgarian", "Chinese", "Czech", "Danish", "Dutch", "English",
-    "French", "German", "Greek", "Gujarati", "Hindi", "Indonesian",
+    "Finnish", "French", "German", "Greek", "Gujarati", "Hindi", "Indonesian",
     "Italian", "Japanese", "Kannada", "Korean", "Malay", "Marathi",
     "Norwegian", "Polish", "Portuguese", "Punjabi", "Romanian",
     "Russian", "Slovak", "Spanish", "Swedish", "Tamil", "Telugu",

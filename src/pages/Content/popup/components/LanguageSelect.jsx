@@ -59,6 +59,7 @@ export default function LanguageDropdown({ value, handleChange }) {
     Danish: "https://flagcdn.com/dk.svg",
     Dutch: "https://flagcdn.com/nl.svg",
     English: "https://flagcdn.com/gb.svg",
+    Finnish: "https://flagcdn.com/fi.svg",
     French: "https://flagcdn.com/fr.svg",
     German: "https://flagcdn.com/de.svg",
     Greek: "https://flagcdn.com/gr.svg",
